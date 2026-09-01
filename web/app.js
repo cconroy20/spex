@@ -11,6 +11,12 @@ const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
 const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual' };
+/* Whether the species selection is still whatever the star opened with.  The
+   default set is chosen per star from what actually absorbs, so switching to
+   Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
+   three species that matter most there.  A selection the user has actually
+   made is theirs and carries across; an untouched one is replaced. */
+let pristine = true;
 const $ = s => document.querySelector(s);
 const R_MIN = 1000, R_NATIVE = 300000;
 const posToR = p => Math.round(10 ** (Math.log10(R_MIN)
@@ -658,6 +664,7 @@ function readHash() {
   if (h.has('s')) {
     state.on.clear();
     decodeURIComponent(h.get('s')).split(',').filter(Boolean).forEach(n => state.on.add(n));
+    pristine = false;                       // a link carries an explicit list
   }
   if (h.has('R')) { state.R = +h.get('R'); const el = $('#res'); if (el) el.value = rToPos(state.R); }
   if (h.get('m') === 'c') state.mode = 'combined';
@@ -1057,6 +1064,7 @@ function buildChips() {
       el.addEventListener('click', () => {
         state.on.has(s.name) ? state.on.delete(s.name) : state.on.add(s.name);
         el.classList.toggle('on');
+        pristine = false;
         deferHash(); refresh();
       });
       box.appendChild(el);
@@ -1114,6 +1122,10 @@ async function selectStar(i) {
   const f = state.i0 / M.n, g = state.i1 / M.n;      // keep the window
   M = await (await fetch(`${DB}/meta.json`)).json();
   state.i0 = f * M.n; state.i1 = g * M.n;
+  if (pristine) {
+    state.on.clear();
+    M.default_on.forEach(n => state.on.add(n));
+  }
   buildStars(); buildChips(); loadLineIndex();
   deferHash();
   await refresh();
@@ -1162,10 +1174,11 @@ async function main() {
   if (state.mode === 'combined') setMode('combined');
 
   $('#toggleall').addEventListener('click', () => {
-    M.series.forEach(s => state.on.add(s.name)); buildChips(); refresh();
+    M.series.forEach(s => state.on.add(s.name));
+    pristine = false; buildChips(); refresh();
   });
   $('#togglenone').addEventListener('click', () => {
-    state.on.clear(); buildChips(); refresh();
+    state.on.clear(); pristine = false; buildChips(); refresh();
   });
   window.addEventListener('resize', () => { syncRail(); draw(); drawBrush(); });
   syncRail();
