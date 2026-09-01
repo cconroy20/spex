@@ -16,18 +16,23 @@ git remote get-url origin > /dev/null 2>&1 || { echo "no 'origin' remote"; exit 
 [ -f web/index.html ] || { echo "no web/index.html"; exit 1; }
 [ -f web/.nojekyll ] || { echo "web/.nojekyll missing (Pages would drop _flux etc.)"; exit 1; }
 
+# Build on a throwaway branch and push it to gh-pages by refspec.  Checking
+# out `gh-pages` itself would collide with the local branch left by the last
+# deploy, and deleting that branch each time is one more thing to get wrong.
 TMP=$(mktemp -d)
+SCRATCH="deploy-$$"
 git worktree add --detach -q "$TMP"
 (
   cd "$TMP"
-  git checkout -q --orphan "$BRANCH"
+  git checkout -q --orphan "$SCRATCH"
   git rm -rqf . 2>/dev/null || true
   # -R and the trailing dot copy the CONTENTS of web/, so the site sits at the
   # root of the branch and .nojekyll lands where Pages looks for it
   cp -R "$HERE"/web/. .
   git add -A
   git commit -q -m "site $(date -u '+%Y-%m-%d %H:%M UTC')"
-  git push -f -q origin "$BRANCH"
+  git push -f -q origin "HEAD:$BRANCH"
 )
 git worktree remove --force "$TMP"
+git branch -qD "$SCRATCH" 2>/dev/null || true
 echo "pushed $BRANCH  ($(du -sh "$HERE"/web | cut -f1))"
