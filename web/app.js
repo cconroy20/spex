@@ -396,28 +396,27 @@ function panels() {
 function fmt(x) { return x.toLocaleString('en-US'); }
 
 function draw() {
-  const wrap = $('#plotwrap'), cv = $('#plot');
-  const W = Math.max(320, wrap.clientWidth - 44);
-  const P = panels();
+  const wrap = $('#plotwrap'), host = $('#plot');
   const padL = 100, padR = 14, padT = 6, padB = 4, gap = 17;
+  /* Logical width == displayed width.  The canvas used to be CSS-stretched to
+     the wrapper while its logical width was 70 px wider, so everything was
+     resampled and a client point was not a canvas point. */
+  const W = Math.max(320, wrap.clientWidth - padL - padR);
+  const LW = W + padL + padR;
+  const P = panels();
   const H = P.reduce((a, q) => a + q.h + gap, 0) + padT + padB;
-  /* WebKit caps canvas area near 16.8 M px^2 and hands back a dead context
-     past it -- with every species on we would ask for 19.2 M.  Back the
-     supersampling off until it fits rather than losing the canvas. */
-  let ss = DPR;
-  while (ss > 1 && (W + padL + padR) * ss * H * ss > 12e6) ss -= 0.25;
-  cv.width = (W + padL + padR) * ss; cv.height = H * ss;
-  cv.style.height = H + 'px';
-  const g = cv.getContext('2d');
-  g.setTransform(ss, 0, 0, ss, 0, 0);
-  g.clearRect(0, 0, W + padL + padR, H);
-  /* The min/max band is a zigzag that reverses direction at every sample.
-     Canvas's default miter join extends such a reversal by up to miterLimit
-     (10) times the line width, which showed up as spikes shooting above the
-     continuum -- pure geometry, not data: the convolution never exceeds
-     0.99999. Round joins have no such overshoot. */
-  g.lineJoin = 'round';
-  g.lineCap = 'round';
+
+  /* ONE CANVAS PER PANEL.  A single canvas for the whole stack is 8,000 px
+     tall with every species on, which trips WebKit's ~16.8 Mpx area cap; the
+     supersampling then had to fall back to 1 and the axes and labels rendered
+     at half resolution on a retina display -- worst exactly when the most was
+     on screen.  Per panel, each canvas stays under 1 Mpx however many there
+     are, so every panel draws at full device resolution. */
+  while (host.children.length > P.length) host.lastChild.remove();
+  while (host.children.length < P.length) host.appendChild(document.createElement('canvas'));
+  host.style.paddingTop = padT + 'px';
+  host.style.paddingBottom = padB + 'px';
+
   const css = getComputedStyle(document.body);
   const ink = css.getPropertyValue('--ink').trim() || INK;
   const line = css.getPropertyValue('--line').trim() || '#ddd';
@@ -425,15 +424,31 @@ function draw() {
   const mol = css.getPropertyValue('--mol').trim() || MOL;
 
   /* Reduce one sample per DEVICE pixel, not per CSS pixel: the backing store
-     is already DPR times wider, so sampling at CSS resolution threw away half
-     the detail on a retina display. */
-  const NS = Math.max(1, Math.round(W * ss));
-  const px = i => padL + (i + 0.5) / ss;    // x0 === padL for every panel
+     is DPR times wider, so sampling at CSS resolution threw away half the
+     detail on a retina display. */
+  const NS = Math.max(1, Math.round(W * DPR));
+  const px = i => padL + (i + 0.5) / DPR;   // x0 === padL for every panel
   const useFull = (state.i1 - state.i0) <= FULL_MAX;
   let y = padT;
   const FS = 15;
-  g.font = `${FS}px Charter, Georgia, serif`;
-  for (const q of P) {
+  P.forEach((q, pi) => {
+    const ph = q.h + gap;
+    const cv = host.children[pi];
+    cv.width = LW * DPR; cv.height = ph * DPR;
+    cv.style.width = '100%'; cv.style.height = ph + 'px'; cv.style.display = 'block';
+    const g = cv.getContext('2d');
+    // shift the panel's absolute y onto its own canvas, so everything below
+    // still draws in stack coordinates
+    g.setTransform(DPR, 0, 0, DPR, 0, -y * DPR);
+    g.clearRect(0, y, LW, ph);
+    /* The min/max band is a zigzag that reverses direction at every sample.
+       Canvas's default miter join extends such a reversal by up to miterLimit
+       (10) times the line width, which showed up as spikes shooting above the
+       continuum -- pure geometry, not data: the convolution never exceeds
+       0.99999. Round joins have no such overshoot. */
+    g.lineJoin = 'round';
+    g.lineCap = 'round';
+    g.font = `${FS}px Charter, Georgia, serif`;
     const x0 = padL, y0 = y, h = q.h;
     g.strokeStyle = line; g.lineWidth = 1;
     g.strokeRect(x0 + .5, y0 + .5, W, h);
@@ -549,7 +564,7 @@ function draw() {
     if (runs) subText(g, runs, x0 + W - 8, y0 + h - 5, FS + 1);
     g.font = `${FS}px Charter, Georgia, serif`;
     y += h + gap;
-  }
+  });
   const a0 = idxAir(state.i0), a1 = idxAir(state.i1);
   syncWave(a0, a1);
   const round = v => (v >= 1000 ? (Math.round(v / 100) * 100).toLocaleString('en-US')
@@ -558,7 +573,7 @@ function draw() {
   const waiting = P.some(q => (q.sp && !WHOLE[q.key])
     || (q.combined && q.combined.some(n => !WHOLE[n])));
   $('#reslabel').textContent = `R = ${round(state.R)}` + (waiting ? ' · loading…' : '');
-  cv._geom = { padL, W, P, padT, gap, LW: W + padL + padR, LH: H };
+  host._geom = { padL, W, P, padT, gap, LW, LH: H };
   drawRuler(padL, W, padR);
   redrawTip();
 }
