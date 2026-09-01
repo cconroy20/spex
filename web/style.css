@@ -10,7 +10,7 @@ body{
 header,#controls,#main{max-width:1500px;margin:0 auto;padding:0 22px}
 header{padding-top:26px}
 h1{font-size:2.6rem;margin:0 0 .3em;letter-spacing:-.015em}
-.sub{margin:0 0 .5em;max-width:82ch;color:#333}
+.sub{margin:0 0 .5em;max-width:108ch;color:#333}
 .meta{margin:0 0 18px;color:var(--muted);font-size:.92rem}
 .stars{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 10px}
 .star{
