@@ -667,7 +667,12 @@ function readHash() {
   if (h.has('s')) {
     state.on.clear();
     decodeURIComponent(h.get('s')).split(',').filter(Boolean).forEach(n => state.on.add(n));
-    pristine = false;                       // a link carries an explicit list
+    /* The app writes s= into the URL itself on every view change, so its mere
+       presence is not a choice by anyone -- treating it as one made `pristine`
+       false before the first click and defeated the per-star defaults.  It
+       counts as a choice only when it differs from what this star opens with. */
+    const def = new Set(M.default_on);
+    pristine = state.on.size === def.size && [...state.on].every(n => def.has(n));
   }
   if (h.has('R')) { state.R = +h.get('R'); const el = $('#res'); if (el) el.value = rToPos(state.R); }
   if (h.get('m') === 'c') state.mode = 'combined';
