@@ -649,30 +649,59 @@ function deferHash() {
   hashT = setTimeout(writeHash, 250);
 }
 /* The URL carries the view, so a link can point at one line. */
+/* The URL records only what DIFFERS from how the star opens, and packs the
+   species set into a base-36 bitmask rather than spelling out fourteen names.
+   Writing the whole state made the default view carry 145 characters of hash
+   describing nothing but the default. */
+function encodeOn() {
+  let bits = 0n;
+  M.series.forEach((x, i) => { if (state.on.has(x.name)) bits |= 1n << BigInt(i); });
+  return bits.toString(36);
+}
+function decodeOn(str) {
+  const out = new Set();
+  if (/[,%\s]/.test(str)) {                       // an older link, spelled out
+    decodeURIComponent(str).split(',').filter(Boolean).forEach(n => out.add(n));
+    return out;
+  }
+  let bits = 0n;
+  for (const ch of str.toLowerCase()) {
+    const d = parseInt(ch, 36);
+    if (isNaN(d)) return null;
+    bits = bits * 36n + BigInt(d);
+  }
+  M.series.forEach((x, i) => { if ((bits >> BigInt(i)) & 1n) out.add(x.name); });
+  return out;
+}
+const sameSet = (a, b) => a.size === b.size && [...a].every(n => b.has(n));
+
 function writeHash() {
-  const a = idxAir(state.i0).toFixed(2), b = idxAir(state.i1).toFixed(2);
-  const on = M.series.filter(s => state.on.has(s.name)).map(s => s.name).join(',');
-  const p = [`w=${a}-${b}`];
-  if (DB !== STARS[0].dir) p.push('star=' + encodeURIComponent(STARS.find(x => x.dir === DB).name));
-  if (on) p.push('s=' + encodeURIComponent(on));
-  p.push('R=' + state.R);
+  const p = [];
+  if (DB !== STARS[0].dir) p.push('star=' + DB.split('/').pop());
+  if (state.i0 > 0.5 || state.i1 < M.n - 0.5) {
+    p.push(`w=${idxAir(state.i0).toFixed(2)}-${idxAir(state.i1).toFixed(2)}`);
+  }
+  if (!sameSet(state.on, new Set(M.default_on))) p.push('s=' + encodeOn());
+  if (state.R !== R_NATIVE) p.push('R=' + state.R);
   if (state.mode === 'combined') p.push('m=c');
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
-  try { history.replaceState(null, '', '#' + p.join('&')); } catch (e) { /* ignore */ }
+  const url = p.length ? '#' + p.join('&') : location.pathname + location.search;
+  try { history.replaceState(null, '', url); } catch (e) { /* ignore */ }
 }
+
 function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   if (h.has('s')) {
-    state.on.clear();
-    decodeURIComponent(h.get('s')).split(',').filter(Boolean).forEach(n => state.on.add(n));
-    /* The app writes s= into the URL itself on every view change, so its mere
-       presence is not a choice by anyone -- treating it as one made `pristine`
-       false before the first click and defeated the per-star defaults.  It
-       counts as a choice only when it differs from what this star opens with. */
-    const def = new Set(M.default_on);
-    pristine = state.on.size === def.size && [...state.on].every(n => def.has(n));
+    const set = decodeOn(h.get('s'));
+    if (set && set.size) {
+      state.on.clear();
+      set.forEach(n => state.on.add(n));
+      // s= is now written only when it differs from the default, but older
+      // links spelled out the default too, so still compare rather than assume
+      pristine = sameSet(state.on, new Set(M.default_on));
+    }
   }
   if (h.has('R')) { state.R = +h.get('R'); const el = $('#res'); if (el) el.value = rToPos(state.R); }
   if (h.get('m') === 'c') state.mode = 'combined';
@@ -1149,7 +1178,9 @@ async function main() {
   // the star has to be settled before anything is fetched
   const h0 = new URLSearchParams(location.hash.slice(1));
   if (h0.has('star')) {
-    const st = STARS.find(x => x.name === decodeURIComponent(h0.get('star')));
+    const v = decodeURIComponent(h0.get('star'));
+    // the tag now, the display name in links written before that change
+    const st = STARS.find(x => x.dir && (x.dir.split('/').pop() === v || x.name === v));
     if (st && st.dir) DB = st.dir;
   }
   M = await (await fetch(`${DB}/meta.json`)).json();
