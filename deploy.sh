@@ -29,6 +29,15 @@ git worktree add --detach -q "$TMP"
   # -R and the trailing dot copy the CONTENTS of web/, so the site sits at the
   # root of the branch and .nojekyll lands where Pages looks for it
   cp -R "$HERE"/web/. .
+  # Pages serves index.html, app.js and style.css all with max-age=600 and
+  # caches them independently, so a browser can hold new HTML against a
+  # ten-minute-old script -- the buttons appear but nothing is wired to them.
+  # Stamping the commit onto the asset URLs makes new HTML always ask for a
+  # URL it has never seen.
+  V=$(git -C "$HERE" rev-parse --short HEAD)
+  sed -i '' -e "s|src=\"app.js\"|src=\"app.js?v=$V\"|" \
+            -e "s|href=\"style.css\"|href=\"style.css?v=$V\"|" index.html
+  grep -q "app.js?v=" index.html || { echo "asset stamping failed"; exit 1; }
   git add -A
   git commit -q -m "site $(date -u '+%Y-%m-%d %H:%M UTC')"
   git push -f -q origin "HEAD:$BRANCH"
