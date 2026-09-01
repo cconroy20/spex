@@ -967,9 +967,13 @@ function findLines(a, tol, allow) {
                  lo: c.lab[c.ll[i]], up: c.lab[c.ul[i]] });
     }
   }
+  /* Rank on the MEASURED depth, with the predicted one only breaking ties.
+     Predicted depth alone let a line the synthesis puts at zero outrank a
+     real one -- SiH beat the CO bandhead at 2.3 um that way.  Blended lines
+     share a measured depth, so the predicted value still separates them. */
   for (const h of out) {
     const u = (h.lam - a) / (0.5 * tol);
-    h.score = h.dp * Math.exp(-0.5 * u * u);
+    h.score = (h.ds + 0.01 * h.dp) * Math.exp(-0.5 * u * u);
   }
   out.sort((p, q) => q.score - p.score);
   return { hits: out, pending };

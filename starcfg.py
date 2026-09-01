@@ -87,6 +87,8 @@ SPECIES = [
     ('mFeH', 'FeH', MOLEC, ['fehfx.dat']),
     ('mTiO', 'TiO', MOLEC, ['tiototo2024.bin']),
     ('mVO', 'VO', MOLEC, ['voax.asc', 'vobx.asc', 'vocx.asc']),
+    ('mCO', 'CO', MOLEC, ['coax.dat', 'coxx.dat']),
+    ('mOH', 'OH', MOLEC, ['ohax.dat', 'ohxx.dat']),
     ('mH2O', 'H2O', MOLEC, ['h2opokazatel.bin'], 'h2o'),
 ]
 

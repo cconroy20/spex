@@ -2,7 +2,7 @@
 # Every SYNTHE run one star needs:
 #   eos/      a 0.2 nm run with more_output=yes, purely for the .mol number
 #             densities the line-index build reads
-#   chunks/   the full 355-1000 nm spectrum, in 25 nm pieces (memory)
+#   chunks/   the full 355-2500 nm spectrum, in 25 nm pieces (memory)
 #   species/  one run per species, whole band, each with a private lines.list
 #
 #   ./run_star.sh <tag> <model.atm>
@@ -29,7 +29,7 @@ if [ ! -s "$OUT/eos/$STEM.mol" ]; then
   echo "eos: $(ls $d | tr '\n' ' ')"
 fi
 
-for (( w=355; w<1000; w+=25 )); do
+for (( w=355; w<2500; w+=25 )); do
   d=$OUT/chunks/w${w}
   [ -s "$d/$STEM.spec" ] && continue
   rm -rf $d; mkdir -p $d
@@ -57,7 +57,7 @@ while IFS=$'\t' read -r sp kind rest; do
     fi
   done
   rm -rf $d; mkdir -p $d
-  ( cd $d && ATLAS12=$D $D/bin/synthe.exe "$MODEL" wlbeg=355 wlend=1000 \
+  ( cd $d && ATLAS12=$D $D/bin/synthe.exe "$MODEL" wlbeg=355 wlend=2500 \
       resolu=300000 > log 2>&1 )
   echo "  $sp: $(grep -m1 'Lines:' $d/log | tr -s ' ')"
 done < $BASE/run/species.list

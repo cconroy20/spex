@@ -33,7 +33,10 @@ CM_EV = 1.0 / 8065.54429
 LOGCUT = np.log10(CUT)
 MOLECULES = {n for t, n, *_ in species() if t.startswith('m')}
 
-LEVEL = re.compile(r'^(\d*)([A-Za-z])(\d\d)')
+# state letter with the vibrational level after it.  Most files pad it to two
+# digits (A00e1); CO right-justifies it instead, so v=2 is written "X 2" and
+# v=23 is "X23".  Allow either, or CO falls back to an unparsed label.
+LEVEL = re.compile(r'^(\d*)([A-Za-z])\s*(\d+)')
 RYD_H = 109677.58
 SERIES = {1: 'Lyman', 2: 'Balmer', 3: 'Paschen', 4: 'Brackett', 5: 'Pfund'}
 GREEK = {1: 'α', 2: 'β', 3: 'γ', 4: 'δ'}

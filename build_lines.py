@@ -31,7 +31,7 @@ MOLS = {n: fs for t, n, g, k, fs in _SP
         if k == 'mol' and not any(f.endswith('.bin') for f in fs)}
 MOLDIR = Path.home() / 'kurucz' / 'atlas12' / 'data' / 'mol'
 
-LAM_LO, LAM_HI = 3540.0, 10010.0          # vacuum A, a little outside the grid
+LAM_LO, LAM_HI = 3540.0, 25010.0          # vacuum A, a little outside the grid
 
 
 def read_atom(path):
