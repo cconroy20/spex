@@ -438,8 +438,11 @@ function draw() {
     g.strokeStyle = line; g.lineWidth = 1;
     g.strokeRect(x0 + .5, y0 + .5, W, h);
     const isFlux = q.key === '_fluxpanel';
-    const vmax = isFlux ? M.flux_max / 1e7 : 1.08;
     const vmin = isFlux ? 0 : state.ymin;
+    /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
+       0.08: with a fixed top the continuum slid down the panel as the floor
+       came up, so the one line you read everything against kept moving. */
+    const vmax = isFlux ? M.flux_max / 1e7 : vmin + 1.08 * (1.0 - vmin);
     const Y = v => y0 + h - ((v - vmin) / (vmax - vmin)) * h;
 
     // y ticks

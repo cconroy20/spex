@@ -51,12 +51,13 @@ button:hover{background:#f0ece4}
 #main{display:flex;gap:20px;align-items:flex-start}
 /* 48 species do not fit a viewport, so the rail scrolls on its own */
 #sidebar{position:sticky;top:calc(var(--ctrlh, 120px) + 10px);
-  flex:0 0 212px;padding-top:14px;
+  flex:0 0 246px;padding-top:14px;
   max-height:calc(100vh - var(--ctrlh, 120px) - 30px);
   overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
 .sbtools{display:flex;gap:6px;margin-bottom:8px}
 .sbtools button{flex:1}
-#species{display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:5px}
+/* three columns: 49 species in two ran well off the bottom of the page */
+#species{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:4px}
 #plotwrap{flex:1 1 auto;min-width:0}
 /* a wavelength ruler pinned to the foot of the viewport, so a stack of panels
    several screens tall always has a scale attached to it */
@@ -67,12 +68,12 @@ button:hover{background:#f0ece4}
 #axis{display:block;width:100%}
 .chip{
   display:inline-flex;align-items:center;justify-content:center;gap:5px;
-  font-size:.84rem;padding:3px 4px;border:1px solid var(--line);
+  font-size:.8rem;padding:3px 2px;border:1px solid var(--line);
   border-radius:999px;background:var(--panel);cursor:pointer;user-select:none;
   white-space:nowrap;
 }
 .chip input{display:none}
-.chip .sw{width:9px;height:9px;border-radius:50%;background:#bbb}
+.chip .sw{width:8px;height:8px;border-radius:50%;background:#bbb;flex:none}
 .chip.on{border-color:#9aa8b8;background:#eef2f7}
 .chip.on .sw{background:var(--atom)}
 .chip.on.mol{background:#faf1e2;border-color:#d3b483}
