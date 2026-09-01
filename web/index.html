@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Spectral Explorer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>The Spectral Explorer</h1>
+  <p class="sub">An exploratory tool for understanding the optical spectrum of
+     stars. Models were generated from ATLAS12/SYNTHE programs, which assume
+     LTE and 1D plane-parallel atmosphere.</p>
+  <div id="stars" class="stars" role="radiogroup" aria-label="Star"></div>
+  <p class="meta" id="starnote"></p>
+</header>
+
+<div id="controls">
+  <div class="row">
+    <button id="reset">Reset zoom</button>
+    <span class="hint">drag the box edges to resize &middot; drag inside it to pan &middot; drag outside for a new range &middot; double-click the plot to reset</span>
+  </div>
+  <canvas id="brush" height="54"></canvas>
+  <div class="row">
+    <label>Wavelength</label>
+    <input class="wend" id="wlo" inputmode="decimal" spellcheck="false"
+           title="click to type a wavelength">
+    <div id="wrange" class="dual">
+      <div class="track"></div>
+      <div class="fill" id="wfill"></div>
+      <div class="h" id="hlo"></div>
+      <div class="h" id="hhi"></div>
+    </div>
+    <input class="wend" id="whi" inputmode="decimal" spellcheck="false"
+           title="click to type a wavelength">
+  </div>
+  <div class="row">
+    <label class="resctl">Resolution
+      <input type="range" id="res" min="0" max="1000" step="1" value="1000">
+    </label>
+    <span class="hint" id="reslabel"></span>
+  </div>
+  <div class="row">
+    <label class="resctl">Flux range
+      <input type="range" id="ymin" min="0" max="95" step="1" value="0">
+    </label>
+    <span class="hint" id="yminlabel"></span>
+  </div>
+</div>
+
+<div id="main">
+  <aside id="sidebar">
+    <div class="sbtools">
+      <button id="mindiv" class="seg on">Individual</button>
+      <button id="mcomb" class="seg"
+              title="Approximate: treats overlapping lines as independent, which they are not.">Combined</button>
+    </div>
+    <div class="sbtools">
+      <button id="toggleall">All</button>
+      <button id="togglenone">None</button>
+    </div>
+    <div id="species"></div>
+  </aside>
+  <div id="plotwrap">
+    <canvas id="plot"></canvas>
+    <div id="lmark"></div>
+    <div id="axiswrap"><canvas id="axis"></canvas></div>
+  </div>
+</div>
+<div id="tip"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

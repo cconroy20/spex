@@ -1,0 +1,14 @@
+# SYNTHE and ATLAS12 working trees, and the intermediate arrays they feed.
+# Both are rebuilt by run_star.sh and the assemble scripts; neither belongs in
+# history, and together they are several GB.
+run/
+cache/
+
+# The built bundle.  deploy.sh copies it from the working tree onto the
+# gh-pages branch, so it never needs to enter main's history -- which is what
+# keeps the repo from growing by 17 MB of binaries on every rebuild.
+web/data/
+
+.DS_Store
+*.pyc
+__pycache__/
