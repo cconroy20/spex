@@ -10,13 +10,42 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual' };
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false };
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
    three species that matter most there.  A selection the user has actually
    made is theirs and carries across; an untouched one is replaced. */
 let pristine = true;
+const CANG = 2.99792458e18;          // speed of light, A/s
+let FNU_MAX = 0;                     // peak of the continuum in F_nu
+
+/* F_nu = F_lam * lam^2 / c.  Both modes keep the same axis range, so only the
+   shape of the curve changes and the peak stays put -- which is the whole
+   point of the toggle: where a star peaks depends on what you plot. */
+/* pi * B_lambda(Teff), in erg/s/cm^2/A.  Times pi it carries the same
+   bolometric flux as the model (sigma T^4), so the two curves are directly
+   comparable with nothing fitted or rescaled between them. */
+function planckLam(lamA, T) {
+  const lam = lamA * 1e-8;                       // cm
+  const h = 6.62607015e-27, cc = 2.99792458e10, kB = 1.380649e-16;
+  const x = h * cc / (lam * kB * T);
+  if (x > 700) return 0;
+  return Math.PI * (2 * h * cc * cc / Math.pow(lam, 5)) / (Math.exp(x) - 1) * 1e-8;
+}
+
+function computeFnuMax() {
+  const c = WHOLE['_cont'];
+  if (!c || !M) { FNU_MAX = 0; return; }
+  const k = M.flux_max / 65535;
+  let mx = 0;
+  for (let i = 0; i < c.length; i += 5) {
+    const lam = M.lam0_vac * Math.exp(i * M.dln);
+    const v = c[i] * k * lam * lam / CANG;
+    if (v > mx) mx = v;
+  }
+  FNU_MAX = mx;
+}
 const $ = s => document.querySelector(s);
 const R_MIN = 1000, R_NATIVE = 300000;
 const posToR = p => Math.round(10 ** (Math.log10(R_MIN)
@@ -164,6 +193,7 @@ async function getWhole(name) {
     }
     const v = await fetchSeries('full', name);
     if (v) WHOLE[name] = v;
+    if (name === '_cont') computeFnuMax();
     return v;
   })().catch(() => null).finally(() => { invalidateChunkCache(); delete INFLIGHT[key]; });
   return INFLIGHT[key];
@@ -374,7 +404,10 @@ function yTicks(lo, hi) {
 
 function axisTicks(a0, a1) {
   const span = a1 - a0;
-  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000].find(s => span / s < 11) || 1000;
+  // the ladder used to stop at 1000, which asked for 22 ticks across the full
+  // 3,549-24,993 A band and piled the five-digit labels on top of each other
+  const step = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+    .find(s => span / s < 11) || 10000;
   const out = [];
   for (let v = Math.ceil(a0 / step) * step; v <= a1; v += step) out.push(v);
   return out;
@@ -453,6 +486,11 @@ function draw() {
     g.strokeStyle = line; g.lineWidth = 1;
     g.strokeRect(x0 + .5, y0 + .5, W, h);
     const isFlux = q.key === '_fluxpanel';
+    const fnu = isFlux && state.fnu && FNU_MAX > 0;
+    // lam^2/c at a screen sample, and at a native index
+    const lamOf = j => M.lam0_vac * Math.exp(j * M.dln);
+    const facS = i => (fnu ? (l => l * l / CANG)(lamOf(state.i0 + (state.i1 - state.i0) * (i + 0.5) / NS)) : 1);
+    const facJ = j => (fnu ? (l => l * l / CANG)(lamOf(j)) : 1);
     const vmin = isFlux ? 0 : state.ymin;
     /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
        0.08: with a fixed top the continuum slid down the panel as the floor
@@ -476,10 +514,11 @@ function draw() {
     g.translate(x0 - 56, y0 + h / 2);
     g.rotate(-Math.PI / 2);
     g.textBaseline = 'middle';
-    const ylab = isFlux ? [{ t: 'F' }, { t: '\u03bb', sub: true }] : [{ t: 'norm.' }];
+    const ylab = isFlux ? [{ t: 'F' }, { t: fnu ? '\u03bd' : '\u03bb', sub: true }] : [{ t: 'norm.' }];
     subText(g, ylab, runsWidth(g, ylab, FS) / 2, 0, FS);
     g.restore();
 
+    const fluxScale = fnu ? M.flux_max / (1e7 * FNU_MAX) : 1 / 1e7;
     const series = isFlux ? ['_flux', '_cont'] : [q.key];
     const comb = q.combined || null;
     // clip to the PANEL BOX: the polyline deliberately runs a couple of points
@@ -491,7 +530,7 @@ function draw() {
     for (const nm of series) {
       const col = nm === '_cont' ? AMBER
         : (q.sp ? (q.sp.kind === 'mol' ? mol : atom) : ink);
-      const scale = (nm === '_flux' || nm === '_cont') ? 1 / 1e7 : 1;
+      const scale = (nm === '_flux' || nm === '_cont') ? fluxScale : 1;
       g.strokeStyle = col; g.lineWidth = nm === '_cont' ? 1.4 : 1;
       // the combined trace is already convolved, so it must not be smoothed
       // again on the polyline path
@@ -503,7 +542,7 @@ function draw() {
         let st = false;
         for (let i = 0; i < NS; i++) {
           if (isNaN(e.mid[i])) { st = false; continue; }
-          const yy = Y(e.mid[i] * scale);
+          const yy = Y(e.mid[i] * scale * facS(i));
           st ? g.lineTo(px(i), yy) : g.moveTo(px(i), yy); st = true;
         }
         g.stroke();
@@ -531,7 +570,7 @@ function draw() {
         g.beginPath();
         for (let j = a; j < b; j++) {
           const x = padL + (j - state.i0) / (state.i1 - state.i0) * W;
-          const yy = Y(vals[j - a] * scale);
+          const yy = Y(vals[j - a] * scale * facJ(j));
           j === a ? g.moveTo(x, yy) : g.lineTo(x, yy);
         }
         g.stroke();
@@ -546,7 +585,8 @@ function draw() {
         let st = false;
         for (let i = 0; i < NS; i++) {
           if (isNaN(e.lo[i])) { st = false; continue; }
-          const yTop = Y(e.hi[i] * scale), yBot = Y(e.lo[i] * scale);
+          const f = facS(i);
+          const yTop = Y(e.hi[i] * scale * f), yBot = Y(e.lo[i] * scale * f);
           st ? g.lineTo(px(i), yTop) : g.moveTo(px(i), yTop);
           g.lineTo(px(i), yBot);
           st = true;
@@ -554,10 +594,22 @@ function draw() {
         g.stroke();
       }
     }
+    if (isFlux && state.bb) {
+      g.strokeStyle = css.getPropertyValue('--muted').trim() || '#777';
+      g.lineWidth = 1.3; g.setLineDash([6, 4]);
+      g.beginPath();
+      for (let i = 0; i < NS; i++) {
+        const j = state.i0 + (state.i1 - state.i0) * (i + 0.5) / NS;
+        const v = planckLam(lamOf(j), M.model.teff) * fluxScale * facS(i);
+        const yy = Y(v);
+        i ? g.lineTo(px(i), yy) : g.moveTo(px(i), yy);
+      }
+      g.stroke(); g.setLineDash([]);
+    }
     g.restore();
     // label
     g.fillStyle = ink; g.textBaseline = 'bottom';
-    const runs = isFlux ? null
+    const runs = isFlux ? (state.bb ? [{ t: `blackbody, T = ${M.model.teff} K` }] : null)
       : q.key === '_norm' ? [{ t: 'all lines' }]
       : comb ? [{ t: `${comb.length} species multiplied` }]
       : [{ t: q.key }];
@@ -593,10 +645,16 @@ function drawRuler(padL, W, padR) {
   g.textAlign = 'center'; g.textBaseline = 'top';
   const a0 = idxAir(state.i0), a1 = idxAir(state.i1);
   g.strokeStyle = line; g.lineWidth = 1;
+  // a tick whose label would touch the previous one keeps its mark and loses
+  // its text: better a sparse axis than an illegible one
+  let lastRight = -1e9;
   for (const v of axisTicks(a0, a1)) {
     const x = padL + (airIdx(v) - state.i0) / (state.i1 - state.i0) * W;
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 7); g.stroke();
-    tickLabel(g, fmt(v), x, 10, 2, W + padL + padR - 2);
+    const txt = fmt(v), half = g.measureText(txt).width / 2;
+    if (x - half < lastRight + 8) continue;
+    tickLabel(g, txt, x, 10, 2, W + padL + padR - 2);
+    lastRight = x + half;
   }
   g.textAlign = 'center';                 // same face, size and colour as the ticks
   g.fillText('wavelength  (air, \u00c5)', padL + W / 2, 40);
@@ -699,6 +757,8 @@ function writeHash() {
   if (!sameSet(state.on, new Set(M.default_on))) p.push('s=' + encodeOn());
   if (state.R !== R_NATIVE) p.push('R=' + state.R);
   if (state.mode === 'combined') p.push('m=c');
+  if (state.fnu) p.push('f=nu');
+  if (state.bb) p.push('bb=1');
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
@@ -720,6 +780,8 @@ function readHash() {
   }
   if (h.has('R')) { state.R = +h.get('R'); const el = $('#res'); if (el) el.value = rToPos(state.R); }
   if (h.get('m') === 'c') state.mode = 'combined';
+  if (h.get('f') === 'nu') state.fnu = true;
+  if (h.has('bb')) state.bb = true;
   if (h.has('y')) { state.ymin = +h.get('y'); const el = $('#ymin'); if (el) el.value = Math.round(state.ymin * 100); }
   if (h.has('w')) {
     const m = h.get('w').split('-').map(Number);
@@ -1113,7 +1175,16 @@ function buildChips() {
   const box = $('#species');
   box.innerHTML = '';
   for (const gname of M.groups) {                 // grouped in order, unlabelled
-    for (const s of M.series.filter(q => q.group === gname)) {
+    const members = M.series.filter(q => q.group === gname);
+    if (!members.length) continue;
+    if (gname === 'molecules') {
+      // grid-column 1/-1 takes a whole row, so the molecules start on a fresh
+      // one however the atoms happened to fall across the three columns
+      const hr = document.createElement('div');
+      hr.className = 'chipsep';
+      box.appendChild(hr);
+    }
+    for (const s of members) {
       const el = document.createElement('label');
       el.className = 'chip' + (s.kind === 'mol' ? ' mol' : '') + (state.on.has(s.name) ? ' on' : '');
       el.innerHTML = `<span class="sw"></span>${s.name}`;
@@ -1227,6 +1298,22 @@ async function main() {
     $('#mcomb').classList.toggle('on', m === 'combined');
     deferHash(); refresh();
   };
+  const setFlux = v => {
+    state.fnu = v;
+    $('#flam').classList.toggle('on', !v);
+    $('#fnu').classList.toggle('on', v);
+    deferHash(); scheduleDraw();
+  };
+  const setBB = v => {
+    state.bb = v;
+    $('#bb').classList.toggle('on', v);
+    deferHash(); scheduleDraw();
+  };
+  $('#bb').addEventListener('click', () => setBB(!state.bb));
+  if (state.bb) setBB(true);
+  $('#flam').addEventListener('click', () => setFlux(false));
+  $('#fnu').addEventListener('click', () => setFlux(true));
+  if (state.fnu) setFlux(true);
   $('#mindiv').addEventListener('click', () => setMode('individual'));
   $('#mcomb').addEventListener('click', () => setMode('combined'));
   if (state.mode === 'combined') setMode('combined');

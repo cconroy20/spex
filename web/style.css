@@ -58,6 +58,7 @@ button:hover{background:#f0ece4}
 .sbtools button{flex:1}
 /* three columns: 49 species in two ran well off the bottom of the page */
 #species{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:4px}
+.chipsep{grid-column:1/-1;height:1px;background:var(--line);margin:7px 0 6px}
 #plotwrap{flex:1 1 auto;min-width:0}
 /* a wavelength ruler pinned to the foot of the viewport, so a stack of panels
    several screens tall always has a scale attached to it */
@@ -138,5 +139,11 @@ input.wend:focus{outline:none;border-color:var(--atom);color:var(--ink);
   background:var(--panel)}
 #wlo{text-align:right}
 
+.fsw{display:inline-flex;align-items:center;gap:7px;font-size:.92rem;
+  margin-left:6px}
+.fsw .seg{padding:2px 9px}
+.fsw .seg:first-of-type{border-radius:4px 0 0 4px}
+.fsw .seg:nth-of-type(2){border-radius:0 4px 4px 0;margin-left:-1px}
+.fsw .seg.lone{border-radius:4px;margin-left:10px}
 .seg.on{background:var(--atom);color:#fff;border-color:var(--atom)}
 .seg.on:hover{background:var(--atom)}
