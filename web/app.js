@@ -544,6 +544,9 @@ function draw() {
     g.restore();
 
     const fluxScale = fnu ? M.flux_max / (1e7 * FNU_MAX) : 1 / 1e7;
+    // the formation panel is convolved with the same kernel as the spectra:
+    // it was inconsistent otherwise, smoothed on the polyline path but not on
+    // the min/max one, so which you got depended on the zoom
     const series = isFlux ? ['_flux', '_cont'] : isForm ? [fname] : [q.key];
     const comb = q.combined || null;
     // clip to the PANEL BOX: the polyline deliberately runs a couple of points
@@ -605,7 +608,7 @@ function draw() {
            stroke between samples, which read as chunky. */
         const e = arrC
           ? minMax(j => arrC[j], arrC.length, state.i0, state.i1, NS)
-          : band(nm, state.i0, state.i1, NS, useFull, isForm ? R_NATIVE : state.R);
+          : band(nm, state.i0, state.i1, NS, useFull, state.R);
         g.beginPath();
         let st = false;
         for (let i = 0; i < NS; i++) {
