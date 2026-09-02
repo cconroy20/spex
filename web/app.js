@@ -653,7 +653,7 @@ function draw() {
   $('#yminlabel').textContent = `${state.ymin.toFixed(2)} – 1.0`;
   const waiting = P.some(q => (q.sp && !WHOLE[q.key])
     || (q.combined && q.combined.some(n => !WHOLE[n])));
-  $('#reslabel').textContent = `R = ${round(state.R)}` + (waiting ? ' · loading…' : '');
+  $('#reslabel').textContent = `R = ${round(state.R)}` + (waiting ? '   loading\u2026' : '');
   host._geom = { padL, W, P, padT, gap, LW, LH: H };
   drawRuler(padL, W, padR);
   redrawTip();
@@ -1143,8 +1143,9 @@ function showTip(ev) {
     };
     const t = at('_ftau'), k = at('_ftemp');
     if (t != null && k != null) {
-      form = `<div class="par">log &tau;<sub>5000</sub> ${t.toFixed(2)}`
-           + ` &middot; T ${fmt(Math.round(k))} K</div>`;
+      const mn = v => v.toFixed(2).replace('-', '\u2212');
+      form = `<div class="par vals"><span>log &tau;<sub>5000</sub> = ${mn(t)}</span>`
+           + `<span>T = ${fmt(Math.round(k))} K</span></div>`;
     }
   }
 
@@ -1156,13 +1157,16 @@ function showTip(ev) {
     const h = res.hits[0];
     const d = h.ds > 0 ? h.ds : h.dp;   // measured where we have it
     txt = `<div class="hd"><b>${esc(h.name)}</b> ${h.lam.toFixed(3)} &#8491;</div>`
-        + `<div class="par">log <i>gf</i> ${sgn(h.gf)} &middot; `
-        + `&chi; ${h.chi.toFixed(3)} eV &middot; depth ${d.toFixed(2)}</div>`
+        + `<div class="par vals"><span>log <i>gf</i> = ${sgn(h.gf)}</span>`
+        + `<span>&chi; = ${h.chi.toFixed(3)} eV</span>`
+        + `<span>depth = ${d.toFixed(2)}</span></div>`
         + levels(h) + form;
     const rest = res.hits.slice(1, 4);
     if (rest.length) {
-      txt += '<div class="also">also here: ' + rest.map(q =>
-        `${esc(q.name)} ${q.lam.toFixed(3)}`).join(' &middot; ') + '</div>';
+      // one per line: names and wavelengths run together without a separator,
+      // and a dotted list of them was the worst of both
+      txt += '<div class="also">also here<br>' + rest.map(q =>
+        `${esc(q.name)} ${q.lam.toFixed(3)}`).join('<br>') + '</div>';
     }
     // a rule at the identified line, so it is obvious which feature was named
     if (hit) {
@@ -1268,10 +1272,10 @@ function buildStars() {
     b.innerHTML = `${st.dir ? '' : '<span class="tag">soon</span>'}`
       + `<span class="nm">${st.name}</span><span class="sp">${st.sp}</span>`
       // two lines: all four numbers on one wraps at this card width
-      + `<div class="pr">T<sub>eff</sub> ${m.teff} K &middot; log <i>g</i> `
-      + `${num(m.logg)}</div>`
-      + `<div class="pr2">[Fe/H] ${rat(m.feh)} &middot; [&alpha;/Fe] `
-      + `${rat(m.afe || 0)}</div>`;
+      + `<div class="pr vals"><span>T<sub>eff</sub> = ${m.teff} K</span>`
+      + `<span>log <i>g</i> = ${num(m.logg)}</span></div>`
+      + `<div class="pr2 vals"><span>[Fe/H] = ${rat(m.feh)}</span>`
+      + `<span>[&alpha;/Fe] = ${rat(m.afe || 0)}</span></div>`;
     b.addEventListener('click', () => selectStar(i));
     box.appendChild(b);
   });

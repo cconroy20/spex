@@ -21,10 +21,13 @@ h1{font-size:2.6rem;margin:0 0 .3em;letter-spacing:-.015em}
 .star:hover{background:#f0ece4}
 .star .nm{font-size:1.14rem;letter-spacing:-.01em}
 .star .sp{color:var(--muted);font-size:.85rem;margin-left:.45em}
-.star .pr{color:var(--muted);font-size:.84rem;margin-top:4px;
+/* Values are separated by space, not punctuation.  A row of middle dots
+   between numbers reads as clutter at this size; a wide gap does the same
+   work and lets the eye group each name with its own value. */
+.vals{display:flex;flex-wrap:wrap;gap:.1rem 1.15em;
   font-variant-numeric:tabular-nums}
-.star .pr2{color:var(--muted);font-size:.84rem;margin-top:1px;
-  font-variant-numeric:tabular-nums}
+.star .pr{color:var(--muted);font-size:.84rem;margin-top:4px}
+.star .pr2{color:var(--muted);font-size:.84rem;margin-top:1px}
 .star.on{border-color:var(--atom);background:#eaf1f8;
   box-shadow:inset 0 0 0 1px var(--atom)}
 .star.on:hover{background:#eaf1f8}
@@ -88,11 +91,12 @@ button:hover{background:#f0ece4}
   font-variant-numeric:tabular-nums;max-width:19rem;
 }
 #tip .hd{font-size:.92rem}
-#tip .par{color:var(--ink);margin-top:2px}
+#tip .par{color:var(--ink);margin-top:3px}
 #tip .lev{color:var(--muted);margin-top:3px;font-size:.78rem}
 #tip .j{color:var(--muted)}
 #tip .also{margin-top:5px;padding-top:4px;border-top:1px solid var(--line);
-  color:var(--muted);font-size:.78rem;line-height:1.45}
+  color:var(--muted);font-size:.78rem;line-height:1.5}
+.hint.vals{gap:.1rem 1.4em}
 #plotwrap{position:relative}
 #lmark{position:absolute;display:none;width:1px;pointer-events:none;z-index:4;
   background:var(--muted);opacity:.75}
