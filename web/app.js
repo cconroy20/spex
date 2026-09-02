@@ -718,7 +718,8 @@ function drawBrush() {
 async function ensure() {
   const useFull = (state.i1 - state.i0) <= FULL_MAX;
   const need = ['_flux', '_cont', '_norm'];
-  if (state.form !== 'off' && M.form) need.push(state.form === 'temp' ? '_ftemp' : '_ftau');
+  // both, not just the one on display: the hover readout gives each
+  if (state.form !== 'off' && M.form) need.push('_ftau', '_ftemp');
   for (const s of M.series) if (state.on.has(s.name)) need.push(s.name);
   await Promise.all(need.map(n => loadOv(n)));
   await Promise.all(need.map(n => getWhole(n)));   // every R convolves real samples
@@ -1129,8 +1130,27 @@ function showTip(ev) {
   const tol = Math.abs(idxAir(i + 3 * (state.i1 - state.i0) / gm.W) - lam);
   const res = findLines(lam, tol, allow);
 
+  /* Over the formation panel, read off where this wavelength forms.  Taken
+     from the smoothed arrays so the numbers match the curve on screen rather
+     than the native data underneath it. */
+  let form = '';
+  if (hit && hit.key === '_form') {
+    const at = nm => {
+      const a = smoothedNative(nm, state.R);
+      if (!a) return null;
+      const j = Math.max(0, Math.min(a.length - 1, Math.round(i)));
+      return qfloor(nm) + a[j];
+    };
+    const t = at('_ftau'), k = at('_ftemp');
+    if (t != null && k != null) {
+      form = `<div class="par">log &tau;<sub>5000</sub> ${t.toFixed(2)}`
+           + ` &middot; T ${fmt(Math.round(k))} K</div>`;
+    }
+  }
+
   let txt = `<b>${lam.toFixed(3)} &#8491;</b>`;
   if (hit && hit.sp) txt += ` <span class="j">${esc(hit.sp.name)}</span>`;
+  txt += form;
   mark.style.display = 'none';
   if (res && res.hits.length) {
     const h = res.hits[0];
@@ -1138,7 +1158,7 @@ function showTip(ev) {
     txt = `<div class="hd"><b>${esc(h.name)}</b> ${h.lam.toFixed(3)} &#8491;</div>`
         + `<div class="par">log <i>gf</i> ${sgn(h.gf)} &middot; `
         + `&chi; ${h.chi.toFixed(3)} eV &middot; depth ${d.toFixed(2)}</div>`
-        + levels(h);
+        + levels(h) + form;
     const rest = res.hits.slice(1, 4);
     if (rest.length) {
       txt += '<div class="also">also here: ' + rest.map(q =>
