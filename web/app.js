@@ -10,7 +10,7 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off' };
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false };
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -93,6 +93,7 @@ const airIdx = a => Math.log(air2vac(a) / M.lam0_vac) / M.dln;
 
 /* ---------- data ---------- */
 const dec = (u, name) => {
+  if (name === '_tell') return 1 / 65535;       // transmission, 0 to 1
   const q = M.qrange && M.qrange[name];
   if (q) return (q[1] - q[0]) / 65535;          // formation depths: floor is not 0
   const hi = (name === '_flux' || name === '_cont') ? M.flux_max : M.norm_max;
@@ -160,8 +161,15 @@ function fluxFrom(no, co) {
   return out;
 }
 
+/* The telluric transmission is a property of Earth, not of the star, so it
+   lives once at data/ rather than under each star and survives a switch. */
+const TELL = '_tell';
+const seriesURL = (dir, name) => (name === TELL
+  ? `data/telluric${dir === 'ov' ? '_ov' : ''}.bin`
+  : `${DB}/${dir}/${fileOf(name)}.bin`);
+
 async function fetchSeries(dir, name) {
-  const r = await fetch(`${DB}/${dir}/${fileOf(name)}.bin`);
+  const r = await fetch(seriesURL(dir, name));
   if (!r.ok) return null;
   const b = new Uint8Array(await r.arrayBuffer());
   const h = parseHdr(b);
@@ -433,9 +441,12 @@ const PANEL_H = 132;              // every panel the same height
 function panels() {
   const p = [{ key: '_fluxpanel', h: PANEL_H, label: 'flux' },
              { key: '_norm', h: PANEL_H, label: 'normalized' }];
+  if (state.tell) p.push({ key: '_tell', h: PANEL_H, tell: true });
   if (state.form !== 'off' && M.form) p.push({ key: '_form', h: PANEL_H, form: state.form });
   if (state.mode === 'combined') {
     const sel = M.series.filter(s => state.on.has(s.name)).map(s => s.name);
+    // the telluric multiplies into the product like any other absorber
+    if (state.tell) sel.push(TELL);
     if (sel.length) p.push({ key: '_combined', h: PANEL_H, combined: sel });
   } else {
     for (const s of M.series) if (state.on.has(s.name)) p.push({ key: s.name, h: PANEL_H, sp: s });
@@ -557,6 +568,7 @@ function draw() {
     g.beginPath(); g.rect(x0, y0, W, h); g.clip();
     for (const nm of series) {
       const col = nm === '_cont' ? AMBER
+        : nm === TELL ? (css.getPropertyValue('--accent').trim() || '#8E2F6E')
         : (q.sp ? (q.sp.kind === 'mol' ? mol : atom) : ink);
       const scale = (nm === '_flux' || nm === '_cont') ? fluxScale : 1;
       g.strokeStyle = col; g.lineWidth = nm === '_cont' ? 1.4 : 1;
@@ -640,7 +652,10 @@ function draw() {
     const runs = isFlux ? (state.bb ? [{ t: `blackbody, T = ${M.model.teff} K` }] : null)
       : isForm ? [{ t: 'formation depth, \u03c4' }, { t: '\u03bb', sub: true }, { t: ' = 1' }]
       : q.key === '_norm' ? [{ t: 'all lines' }]
-      : comb ? [{ t: `${comb.length} species multiplied` }]
+      : q.tell ? [{ t: 'telluric transmission' }]
+      : comb ? [{ t: comb.includes(TELL)
+                    ? `${comb.length - 1} species \u00d7 telluric`
+                    : `${comb.length} species multiplied` }]
       : [{ t: q.key }];
     if (runs) subText(g, runs, x0 + W - 8, y0 + h - 5, FS + 1);
     g.font = `${FS}px Charter, Georgia, serif`;
@@ -720,6 +735,7 @@ async function ensure() {
   const need = ['_flux', '_cont', '_norm'];
   // both, not just the one on display: the hover readout gives each
   if (state.form !== 'off' && M.form) need.push('_ftau', '_ftemp');
+  if (state.tell) need.push(TELL);
   for (const s of M.series) if (state.on.has(s.name)) need.push(s.name);
   await Promise.all(need.map(n => loadOv(n)));
   await Promise.all(need.map(n => getWhole(n)));   // every R convolves real samples
@@ -791,6 +807,7 @@ function writeHash() {
   if (state.fnu) p.push('f=nu');
   if (state.bb) p.push('bb=1');
   if (state.form !== 'off') p.push('fd=' + state.form);
+  if (state.tell) p.push('tel=1');
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
@@ -815,6 +832,7 @@ function readHash() {
   if (h.get('f') === 'nu') state.fnu = true;
   if (h.has('bb')) state.bb = true;
   if (h.has('fd')) state.form = h.get('fd') === 'temp' ? 'temp' : 'tau';
+  if (h.has('tel')) state.tell = true;
   if (h.has('y')) { state.ymin = +h.get('y'); const el = $('#ymin'); if (el) el.value = Math.round(state.ymin * 100); }
   if (h.has('w')) {
     const m = h.get('w').split('-').map(Number);
@@ -1295,7 +1313,10 @@ async function selectStar(i) {
   $('#starnote').textContent = '';
   if (st.dir === DB) return;
   DB = st.dir;
+  const keepOv = OV[TELL], keepWhole = WHOLE[TELL];   // Earth does not change
   OV = {}; CH = {}; WHOLE = {};
+  if (keepOv) OV[TELL] = keepOv;
+  if (keepWhole) WHOLE[TELL] = keepWhole;
   for (const k of Object.keys(INFLIGHT)) delete INFLIGHT[k];
   for (const k of Object.keys(SM)) delete SM[k];
   CB = { key: null, arr: null };
@@ -1372,6 +1393,13 @@ async function main() {
     }
     deferHash(); refresh();                  // may need a series it has not loaded
   };
+  const setTell = v => {
+    state.tell = v;
+    $('#tell').classList.toggle('on', v);
+    deferHash(); refresh();
+  };
+  $('#tell').addEventListener('click', () => setTell(!state.tell));
+  if (state.tell) setTell(true);
   $('#foff').addEventListener('click', () => setForm('off'));
   $('#ftau').addEventListener('click', () => setForm('tau'));
   $('#ftemp').addEventListener('click', () => setForm('temp'));
