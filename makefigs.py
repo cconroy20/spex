@@ -20,12 +20,16 @@ FIG.mkdir(exist_ok=True)
 # 3600 A takes in the Balmer break at 3646 A; the synthesis runs to 3550
 LO, HI = 3600.0, 10000.0
 
-# Per-species spectra: prefer the one-SYNTHE-run-per-species set, which has
-# SYNTHE's own profile physics throughout -- in particular the Holtsmark
-# quasi-static Stark profile for hydrogen, which a Voigt cannot reproduce.
-SPECIES_CACHE = ('species_flux_synthe.npz'
-                 if (HERE / 'cache' / 'species_flux_synthe.npz').exists()
-                 else 'species_flux.npz')
+# Per-species spectra: one SYNTHE run per species, which has SYNTHE's own
+# profile physics throughout -- in particular the Holtsmark quasi-static Stark
+# profile for hydrogen, which a Voigt cannot reproduce.  species_flux_synthe
+# is the 25-species 3550-10000 A set the committed figures were drawn from;
+# sun_species is what run_star.sh + assemble_species.py write today, over
+# 3550-25000 A, and the panels are cut to LO-HI either way.  specflux's own
+# transfer (species_flux.npz) is the cross-check, not a figure source.
+SPECIES_CACHE = next(
+    (f for f in ('species_flux_synthe.npz', 'sun_species.npz')
+     if (HERE / 'cache' / f).exists()), 'sun_species.npz')
 
 s = np.load(HERE / 'cache' / 'sun_synthe.npz')
 LAM, FLUX, CONT, NORM = s['lam_air'], s['flux'], s['cont'], s['norm']
@@ -33,6 +37,12 @@ LAM, FLUX, CONT, NORM = s['lam_air'], s['flux'], s['cont'], s['norm']
 
 def binned(x, y, nb, how='mean'):
     e = np.linspace(LO, HI, nb + 1)
+    # Restrict to the plotted band first.  digitize + clip alone puts every
+    # point outside it into the first or last bin, and the synthesis now runs
+    # to 2.5 um: 48% of the grid would land in the last bin, which read as a
+    # cliff at 10000 A rather than as data.
+    m = (x >= LO) & (x <= HI)
+    x, y = x[m], y[m]
     i = np.clip(np.digitize(x, e) - 1, 0, nb - 1)
     c = np.bincount(i, minlength=nb).astype(float)
     if how == 'mean':
@@ -178,7 +188,7 @@ def figure_zoom():
 
 if __name__ == '__main__':
     figure_overview()
-    if (HERE / 'cache' / 'species_flux.npz').exists():
+    if (HERE / 'cache' / SPECIES_CACHE).exists():
         figure_species()
         figure_zoom()
 

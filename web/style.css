@@ -11,7 +11,6 @@ header,#controls,#main{max-width:1500px;margin:0 auto;padding:0 22px}
 header{padding-top:26px}
 h1{font-size:2.6rem;margin:0 0 .3em;letter-spacing:-.015em}
 .sub{margin:0 0 .5em;max-width:108ch;color:#333}
-.meta{margin:0 0 18px;color:var(--muted);font-size:.92rem}
 .stars{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 10px}
 .star{
   flex:1 1 190px;max-width:300px;text-align:left;display:block;
@@ -31,10 +30,6 @@ h1{font-size:2.6rem;margin:0 0 .3em;letter-spacing:-.015em}
 .star.on{border-color:var(--atom);background:#eaf1f8;
   box-shadow:inset 0 0 0 1px var(--atom)}
 .star.on:hover{background:#eaf1f8}
-.star.soon{opacity:.5;cursor:default}
-.star.soon:hover{background:var(--panel)}
-.star .tag{float:right;font-size:.72rem;letter-spacing:.04em;
-  text-transform:uppercase;color:var(--muted);padding-top:.32em}
 #controls{
   position:sticky;top:0;z-index:5;background:var(--bg);
   border-bottom:1px solid var(--line);padding-top:10px;padding-bottom:12px;
@@ -115,7 +110,6 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:.86em;background:#efece6
   .star:hover{background:#2b2a26}
   .star.on{background:#1d2a36}
   .star.on:hover{background:#1d2a36}
-  .star.soon:hover{background:var(--panel)}
   code{background:#2b2a26}
 }
 

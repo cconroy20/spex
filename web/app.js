@@ -1,15 +1,15 @@
 'use strict';
 /* The Solar Spectrum, species by species.
    Static site: no server logic.  Two data tiers per series -- a decimated
-   overview loaded up front (min/max/mean per bin) and the native R = 300,000
-   arrays fetched in 32 kB chunks by HTTP range request only when zoomed in. */
+   overview (min/max/mean per bin) that paints the first frame, and the native
+   R = 300,000 array, fetched whole for every selected series because every
+   setting of the resolution control convolves the real samples. */
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 const CHUNK = 16384;          // native points per fetched chunk
 const FULL_MAX = 80000;       // window size below which we use native data
-const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
-      AMBER = '#B26B00';
-let M = null, OV = {}, CH = {}, WHOLE = {};
+const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', AMBER = '#B26B00';
+let M = null, OV = {}, WHOLE = {};
 const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
@@ -20,8 +20,8 @@ let pristine = true;
 const CANG = 2.99792458e18;          // speed of light, A/s
 
 /* ---------------------------------------------------------------------
-   Observed-spectrum simulation: SNR per pixel at a fixed sampling.
-   HOOKED UP BUT NOT YET DRAWN -- see README, "Simulated observation".
+   Observed-spectrum simulation: SNR per pixel at a fixed sampling, drawn on
+   the flux and all-lines panels -- see README, "Simulated observation".
 
    A detector pixel is not the model grid.  The model is one sample per
    resolution element at R = 300,000; a spectrograph at resolution R with p
@@ -105,9 +105,8 @@ const rToPos = R => Math.round(1000 * (Math.log10(R || R_NATIVE) - Math.log10(R_
 const fileOf = n => n.replace(/ /g, '_');
 
 /* Which star is on show.  Everything the app fetches hangs off DB, so adding
-   a star is a directory of the same shape plus a row in STARS.  The three
-   without a `dir` are placeholders: their parameters are nominal literature
-   values, to be replaced by whatever the models are actually computed at. */
+   a star is a directory of the same shape plus a row in STARS giving it a
+   `dir`.  The parameters here are the ones each model was computed at. */
 const STARS = [
   { name: 'Sun', sp: 'G2 V', teff: 5777, logg: 4.44, feh: 0.0, afe: 0.0, dir: 'data/sun' },
   { name: 'Procyon', sp: 'F5 IV-V', teff: 6530, logg: 3.96, feh: 0.0, afe: 0.0, dir: 'data/procyon' },
@@ -141,7 +140,7 @@ const idxAir = i => vac2air(M.lam0_vac * Math.exp(i * M.dln));
 const airIdx = a => Math.log(air2vac(a) / M.lam0_vac) / M.dln;
 
 /* ---------- data ---------- */
-const dec = (u, name) => {
+const dec = name => {
   if (name === '_tell') return 1 / 65535;       // transmission, 0 to 1
   const q = M.qrange && M.qrange[name];
   if (q) return (q[1] - q[0]) / 65535;          // formation depths: floor is not 0
@@ -267,17 +266,13 @@ async function getWhole(name) {
     if (v) WHOLE[name] = v;
     if (name === '_cont') computeFnuMax();
     return v;
-  })().catch(() => null).finally(() => { invalidateChunkCache(); delete INFLIGHT[key]; });
+  })().catch(() => null).finally(() => { delete INFLIGHT[key]; });
   return INFLIGHT[key];
 }
-async function getFull(name, i0, i1) { return WHOLE[name] ? WHOLE[name] : getWhole(name); }
-
-let _cName = '', _cIdx = -1, _cBuf = null;
 function fullAt(name, i) {
   const whole = WHOLE[name];
   return whole ? whole[i] : -1;
 }
-function invalidateChunkCache() { _cIdx = -1; _cName = ''; _cBuf = null; }
 
 /* ---------- per-pixel reduction ---------- */
 function blank(W) {
@@ -289,7 +284,7 @@ function envelope(name, i0, i1, W, useFull) {
   // nothing for it rather than throwing and killing the whole frame
   if (!useFull && !OV[name]) return blank(W);
   const lo = new Float32Array(W), hi = new Float32Array(W), mid = new Float32Array(W);
-  const k = dec(null, name);
+  const k = dec(name);
   for (let x = 0; x < W; x++) {
     const a = i0 + (i1 - i0) * x / W, b = i0 + (i1 - i0) * (x + 1) / W;
     let mn = Infinity, mx = -Infinity, sum = 0, cnt = 0;
@@ -312,17 +307,6 @@ function envelope(name, i0, i1, W, useFull) {
   }
   return { lo, hi, mid };
 }
-/* Effective sigma of what actually reaches the eye: the instrumental Gaussian
-   of FWHM = c/R, combined in quadrature with the box of one screen pixel.
-   Without the pixel term the kernel could be far narrower than the pixel, and
-   the curve was point-sampled -- one bin in four at low zoom -- which aliased
-   badly and made the selector look broken.  Returns sigma in tier points. */
-function kernelSigma(i0, i1, W, step, R) {
-  const sigR = R ? (1 / R) / M.dln / 2.35482 / step : 0;
-  const px = (i1 - i0) / W / step;
-  return Math.sqrt(sigR * sigR + px * px / 12);
-}
-
 
 /* ---------- min/max band ----------
    A spectrum panel shows the min-max range within each screen sample, drawn as
@@ -334,6 +318,26 @@ function kernelSigma(i0, i1, W, step, R) {
    ~0.3 ms for 80,000 points, so sixteen species is ~5 ms a frame.  A hoisted-
    clamp, buffer-reusing version was tried and was 2x SLOWER at the moderate
    sigma that matters most, so this stays. */
+/* Convolution buffers are reused rather than allocated.  Each series used to
+   churn ~11 MB per change of R -- a decode pass, three box passes and a final
+   copy -- so a nudge of the resolution knob allocated ~200 MB across the
+   visible panels and spent much of the frame in the collector. */
+function boxBlurInto(src, out, half) {
+  const n = src.length, w = 2 * half + 1;
+  let acc = 0;
+  for (let i = -half; i <= half; i++) acc += src[Math.min(n - 1, Math.max(0, i))];
+  for (let i = 0; i < n; i++) {
+    out[i] = acc / w;
+    acc += src[Math.min(n - 1, i + half + 1)] - src[Math.min(n - 1, Math.max(0, i - half))];
+  }
+  return out;
+}
+let SCRATCH = null;
+function scratchOf(n) {
+  if (!SCRATCH || SCRATCH.length < n) SCRATCH = new Float32Array(n);
+  return SCRATCH.length === n ? SCRATCH : SCRATCH.subarray(0, n);
+}
+
 function boxBlur(src, half) {
   const n = src.length, out = new Float32Array(n), w = 2 * half + 1;
   let acc = 0;
@@ -341,6 +345,30 @@ function boxBlur(src, half) {
   for (let i = 0; i < n; i++) {
     out[i] = acc / w;
     acc += src[Math.min(n - 1, i + half + 1)] - src[Math.min(n - 1, Math.max(0, i - half))];
+  }
+  return out;
+}
+/* The clamped form of this loop costs two Math.min and two Math.max per tap,
+   which over half a million points and seventeen series was most of the frame.
+   The interior needs no clamping at all; only the two ends do. */
+function directGaussInto(src, out, sig) {
+  const half = Math.max(1, Math.ceil(3 * sig)), n = src.length, m = 2 * half + 1;
+  const w = new Float64Array(m);
+  let s = 0;
+  for (let t = -half; t <= half; t++) { const q = Math.exp(-0.5 * (t / sig) ** 2); w[t + half] = q; s += q; }
+  const inv = 1 / s;
+  const edge = i => {
+    let a = 0;
+    for (let t = -half; t <= half; t++) a += src[Math.min(n - 1, Math.max(0, i + t))] * w[t + half];
+    out[i] = a * inv;
+  };
+  const lo = Math.min(half, n), hi = Math.max(lo, n - half);
+  for (let i = 0; i < lo; i++) edge(i);
+  for (let i = hi; i < n; i++) edge(i);
+  for (let i = lo; i < hi; i++) {
+    let a = 0;
+    for (let t = 0; t < m; t++) a += src[i - half + t] * w[t];
+    out[i] = a * inv;
   }
   return out;
 }
@@ -384,17 +412,38 @@ function gaussApprox(src, sig) {
    With R off, the overview's stored min/max IS the exact min/max of the raw
    samples over whole bins, so zoomed-out views need no native data at all. */
 const SM = {};
-function smoothedNative(name, R) {
+/* The decoded native values do not depend on R, so they are cached once per
+   series instead of being rebuilt on every move of the resolution knob. */
+const DECODED = {};
+function decodedNative(name) {
+  if (DECODED[name]) return DECODED[name];
   const w = WHOLE[name];
   if (!w) return null;
+  const k = dec(name), a = new Float32Array(w.length);
+  for (let i = 0; i < w.length; i++) a[i] = w[i] * k;
+  DECODED[name] = a;
+  return a;
+}
+
+function smoothedNative(name, R) {
+  const src = decodedNative(name);
+  if (!src) return null;
   const hit = SM[name];
   if (hit && hit.R === R) return hit.arr;
-  const k = dec(null, name);
-  const src = new Float32Array(w.length);
-  for (let i = 0; i < w.length; i++) src[i] = w[i] * k;
-  const arr = gaussApprox(src, (1 / R) / M.dln / 2.35482);
-  SM[name] = { R, arr: arr === src ? src : Float32Array.from(arr) };
-  return SM[name].arr;
+  const n = src.length, sig = (1 / R) / M.dln / 2.35482;
+  if (sig < 0.05) { SM[name] = { R, arr: src }; return src; }   // nothing to do
+  // one persistent output buffer per series, and one shared scratch
+  let out = (hit && hit.own && hit.arr.length === n) ? hit.arr : new Float32Array(n);
+  if (sig < 1.2) {
+    directGaussInto(src, out, sig);
+  } else {
+    const b = boxesForGauss(sig, 3), sc = scratchOf(n);
+    boxBlurInto(src, out, (b[0] - 1) / 2);
+    boxBlurInto(out, sc, (b[1] - 1) / 2);
+    boxBlurInto(sc, out, (b[2] - 1) / 2);
+  }
+  SM[name] = { R, arr: out, own: true };
+  return out;
 }
 
 let CB = { key: null, arr: null };
@@ -405,7 +454,7 @@ function combinedNative(names, R) {
   for (const nm of names) {
     const w = WHOLE[nm];
     if (!w) return null;                       // still loading
-    const k = dec(null, nm);
+    const k = dec(nm);
     for (let i = 0; i < n; i++) out[i] *= w[i] * k;
   }
   const sm = gaussApprox(out, (1 / R) / M.dln / 2.35482);
@@ -542,9 +591,24 @@ function draw() {
   const useFull = (state.i1 - state.i0) <= FULL_MAX;
   let y = padT;
   const FS = 15;
+  /* Only draw panels that are actually on screen.  With every species on the
+     stack is 8,000 px tall and most of it is scrolled away; drawing it cost
+     the same as drawing what you can see.  A scroll listener redraws, so a
+     panel is never shown stale. */
+  const hostTop = host.getBoundingClientRect().top;
+  const viewH = window.innerHeight || 900;
   P.forEach((q, pi) => {
     const ph = q.h + gap;
     const cv = host.children[pi];
+    const top = hostTop + y, bot = top + ph;
+    if (bot < -240 || top > viewH + 240) {          // off screen: size and skip
+      if (cv.width !== LW * DPR || cv.height !== ph * DPR) {
+        cv.width = LW * DPR; cv.height = ph * DPR;
+      }
+      cv.style.width = '100%'; cv.style.height = ph + 'px'; cv.style.display = 'block';
+      y += q.h + gap;
+      return;
+    }
     cv.width = LW * DPR; cv.height = ph * DPR;
     cv.style.width = '100%'; cv.style.height = ph + 'px'; cv.style.display = 'block';
     const g = cv.getContext('2d');
@@ -593,7 +657,12 @@ function draw() {
     // y ticks
     g.fillStyle = css.getPropertyValue('--muted').trim() || '#777';
     g.textAlign = 'right'; g.textBaseline = 'middle';
-    const tk = isFlux ? { ticks: [0, 0.5, 1.0], dp: 1 }
+    /* The flux axis runs to the star's own continuum peak, which spans a
+       factor of 47 from Barnard's Star to Procyon, so a fixed 0/0.5/1.0
+       ladder left three of the five stars with nothing but the zero.  Ticks
+       are taken from the peak rather than from vmax so that adding noise
+       headroom moves the trace and not the numbers beside it. */
+    const tk = isFlux ? niceTicks(0, M.flux_max / 1e7, 4)
       : isForm ? niceTicks(frng[0], frng[1], 5) : yTicks(vmin, 1.0);
     for (const t of tk.ticks) {
       const yy = Y(t - fq); if (yy < y0 - 1 || yy > y0 + h + 1) continue;
@@ -680,7 +749,7 @@ function draw() {
            adds a vertical excursion at every sample, which reads as a ragged,
            undersampled line even though the grid carries 9-16 points across a
            line FWHM.  At 4x the sample count this is ~10,000 segments: free. */
-        const kk = dec(null, nm);
+        const kk = dec(nm);
         const a = Math.max(0, Math.floor(state.i0) - 1);
         const b = Math.min(M.n, Math.ceil(state.i1) + 2);
         let vals = new Float32Array(b - a);
@@ -819,7 +888,6 @@ function drawBrush() {
 
 /* ---------- interaction ---------- */
 async function ensure() {
-  const useFull = (state.i1 - state.i0) <= FULL_MAX;
   const need = ['_flux', '_cont', '_norm'];
   // both, not just the one on display: the hover readout gives each
   if (state.form !== 'off' && M.form) need.push('_ftau', '_ftemp');
@@ -1158,12 +1226,12 @@ function getBlock(b) {
 
 /* lines within tol of a, restricted to the species in `allow` (null = any).
 
-   Ranking is on the predicted central depth, not the measured one: two lines
-   inside one blend share a measured depth and would tie, while the predicted
-   depth is per line and separates them.  It is stored on a log scale, since
-   ranking cares about ratios.  Distance from the cursor is folded in with a
-   Gaussian of half the tolerance, so pointing at a line picks that line
-   rather than whatever deeper line sits a few pixels away. */
+   Both depths are carried: the measured one, read off that species'
+   synthesized spectrum, and the predicted one, stored on a log scale since
+   ranking cares about ratios.  See the sort below for how they combine.
+   Distance from the cursor is folded in with a Gaussian of half the
+   tolerance, so pointing at a line picks that line rather than whatever
+   deeper line sits a few pixels away. */
 function findLines(a, tol, allow) {
   if (!LIDX) return null;
   const step = LIDX.block, out = [];
@@ -1396,13 +1464,12 @@ function buildStars() {
   STARS.forEach((st, i) => {
     const b = document.createElement('button');
     const on = st.dir === DB;
-    b.className = 'star' + (on ? ' on' : '') + (st.dir ? '' : ' soon');
+    b.className = 'star' + (on ? ' on' : '');
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', on ? 'true' : 'false');
     // the Sun's numbers come from the synthesis, not from this table
     const m = on && M ? M.model : st;
-    b.innerHTML = `${st.dir ? '' : '<span class="tag">soon</span>'}`
-      + `<span class="nm">${st.name}</span><span class="sp">${st.sp}</span>`
+    b.innerHTML = `<span class="nm">${st.name}</span><span class="sp">${st.sp}</span>`
       // two lines: all four numbers on one wraps at this card width
       + `<div class="pr vals"><span>T<sub>eff</sub> = ${m.teff} K</span>`
       + `<span>log <i>g</i> = ${num(m.logg)}</span></div>`
@@ -1419,22 +1486,16 @@ function buildStars() {
    species set are the same for every star. */
 async function selectStar(i) {
   const st = STARS[i];
-  if (!st.dir) {
-    $('#starnote').textContent =
-      `${st.name} has not been computed yet.`;
-    return;
-  }
-  $('#starnote').textContent = '';
   if (st.dir === DB) return;
   DB = st.dir;
   const keepOv = OV[TELL], keepWhole = WHOLE[TELL];   // Earth does not change
-  OV = {}; CH = {}; WHOLE = {};
+  OV = {}; WHOLE = {};
   if (keepOv) OV[TELL] = keepOv;
   if (keepWhole) WHOLE[TELL] = keepWhole;
   for (const k of Object.keys(INFLIGHT)) delete INFLIGHT[k];
   for (const k of Object.keys(SM)) delete SM[k];
+  for (const k of Object.keys(DECODED)) if (k !== TELL) delete DECODED[k];
   CB = { key: null, arr: null };
-  invalidateChunkCache();
   // LCAT is star-independent and deliberately kept across the switch
   for (const k of Object.keys(HDR)) delete HDR[k];
   const f = state.i0 / M.n, g = state.i1 / M.n;      // keep the window
@@ -1562,6 +1623,9 @@ async function main() {
     state.on.clear(); pristine = false; buildChips(); refresh();
   });
   window.addEventListener('resize', () => { syncRail(); draw(); drawBrush(); });
+  // panels are drawn only while on screen, so scrolling has to paint the ones
+  // that just arrived
+  window.addEventListener('scroll', () => scheduleDraw(), { passive: true });
   syncRail();
   await refresh();
 }

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Local server that honours HTTP Range, like GitHub Pages does.
+"""Local server for the site, with Range support and no caching.
 
-python3 -m http.server ignores Range and returns the whole file for every
-request, so a zoom that needs four chunks of sixteen species pulls ~47 MB
-instead of ~2 MB.  Test against this instead, or local behaviour will not
-resemble the deployed site at all.
+The no-cache headers are what matter day to day: a browser holding a stale
+app.js or style.css against new markup collapses the page to nothing, and the
+failure looks like a bug in the code being edited.  Range is served as well,
+so the container's chunk boundaries can be exercised even though the app now
+fetches each series whole.
 
     python3 serve.py [port]
 """
