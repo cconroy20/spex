@@ -10,7 +10,7 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: SNR_OFF, ppre: 3 };
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3 };   // snr 0 = off
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -39,8 +39,6 @@ const CANG = 2.99792458e18;          // speed of light, A/s
    The realization is deterministic in the pixel's absolute index, so panning
    and zooming move the noise WITH the spectrum instead of reshuffling it.
    ------------------------------------------------------------------ */
-const SNR_OFF = 0;
-
 function pixelStep(R, perElem) {
   return R_NATIVE / (R * perElem);          // model points per detector pixel
 }
@@ -487,7 +485,9 @@ const PANEL_H = 132;              // every panel the same height
 function panels() {
   const p = [{ key: '_fluxpanel', h: PANEL_H, label: 'flux' },
              { key: '_norm', h: PANEL_H, label: 'normalized' }];
-  if (state.tell) p.push({ key: '_tell', h: PANEL_H, tell: true });
+  // in combined mode the telluric is already a factor in the product, so its
+  // own panel would be showing the same thing twice
+  if (state.tell && state.mode !== 'combined') p.push({ key: '_tell', h: PANEL_H, tell: true });
   if (state.form !== 'off' && M.form) p.push({ key: '_form', h: PANEL_H, form: state.form });
   if (state.mode === 'combined') {
     const sel = M.series.filter(s => state.on.has(s.name)).map(s => s.name);
