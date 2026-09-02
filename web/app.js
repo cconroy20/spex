@@ -10,7 +10,7 @@ const CHUNK = 16384;          // native points per fetched chunk
 const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', AMBER = '#B26B00';
 let M = null, OV = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, ymax: 1.05, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -42,9 +42,15 @@ const CANG = 2.99792458e18;          // speed of light, A/s
 /* The slider runs the way the quantity does: worst data at the left, and the
    right-hand end is no noise at all rather than a switch that happens to sit
    next to the lowest S/N. */
-const snrFromPos = q => (q >= 100 ? 0 : Math.round(5 * Math.pow(200, q / 99)));
+/* Flux range: both ends move, like the wavelength control.  The span reaches
+   2.0 because noise at low S/N genuinely goes there. */
+const YMIN_LO = 0, YMAX_HI = 2.0;
+const yPos = v => (v - YMIN_LO) / (YMAX_HI - YMIN_LO);
+const yVal = f => YMIN_LO + Math.min(Math.max(f, 0), 1) * (YMAX_HI - YMIN_LO);
+
+const snrFromPos = q => (q >= 100 ? 0 : Math.round(Math.pow(1000, q / 99)));
 const posFromSnr = v => (v <= 0 ? 100
-  : Math.max(0, Math.min(99, Math.round(99 * Math.log(v / 5) / Math.log(200)))));
+  : Math.max(0, Math.min(99, Math.round(99 * Math.log(v) / Math.log(1000)))));
 
 function pixelStep(R, perElem) {
   return R_NATIVE / (R * perElem);          // model points per detector pixel
@@ -279,8 +285,8 @@ function fullAt(name, i) {
 
 /* ---------- per-pixel reduction ---------- */
 function blank(W) {
-  const a = new Float32Array(W).fill(NaN);
-  return { lo: a, hi: a, mid: a };
+  const nan = () => new Float32Array(W).fill(NaN);
+  return { lo: nan(), hi: nan(), mid: nan() };
 }
 function envelope(name, i0, i1, W, useFull) {
   // refresh() paints before awaiting, so a series may not be here yet; draw
@@ -652,9 +658,10 @@ function draw() {
     /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
        0.08: with a fixed top the continuum slid down the panel as the floor
        came up, so the one line you read everything against kept moving. */
+    // the user sets the top; noise only ever raises it, never lowers it
     const vmax = isFlux ? (M.flux_max / 1e7) * (1 + nhead)
       : isForm ? frng[1] - fq
-      : vmin + (1 + Math.max(0.08, nhead)) * (1.0 - vmin);
+      : Math.max(state.ymax, noisy ? 1 + nhead : 0);
     const Y = v => y0 + h - ((v - vmin) / (vmax - vmin)) * h;
 
     // y ticks
@@ -666,10 +673,13 @@ function draw() {
        are taken from the peak rather than from vmax so that adding noise
        headroom moves the trace and not the numbers beside it. */
     const tk = isFlux ? niceTicks(0, M.flux_max / 1e7, 4)
-      : isForm ? niceTicks(frng[0], frng[1], 5) : yTicks(vmin, 1.0);
+      : isForm ? niceTicks(frng[0], frng[1], 5) : yTicks(vmin, state.ymax);
     for (const t of tk.ticks) {
       const yy = Y(t - fq); if (yy < y0 - 1 || yy > y0 + h + 1) continue;
-      g.fillText(isForm && Math.abs(t) >= 1000 ? fmt(t) : t.toFixed(tk.dp), x0 - 8, yy);
+      // a tick sitting on the panel edge had half its label cut off by the
+      // canvas, now that each panel owns one; keep the text inside
+      const ty = Math.min(Math.max(yy, y0 + 7), y0 + h - 7);
+      g.fillText(isForm && Math.abs(t) >= 1000 ? fmt(t) : t.toFixed(tk.dp), x0 - 8, ty);
       g.strokeStyle = line; g.beginPath(); g.moveTo(x0, yy); g.lineTo(x0 + 4, yy); g.stroke();
     }
 
@@ -755,16 +765,12 @@ function draw() {
         const kk = dec(nm);
         const a = Math.max(0, Math.floor(state.i0) - 1);
         const b = Math.min(M.n, Math.ceil(state.i1) + 2);
+        if (!arrC && !WHOLE[nm]) continue;          // not here yet; draw nothing
         let vals = new Float32Array(b - a);
         if (arrC) {
           for (let j = a; j < b; j++) vals[j - a] = arrC[j];
         } else {
-          let last = 1;
-          for (let j = a; j < b; j++) {
-            let v = fullAt(nm, j);
-            if (v < 0) v = last; else last = v;
-            vals[j - a] = v * kk;
-          }
+          for (let j = a; j < b; j++) vals[j - a] = fullAt(nm, j) * kk;
           vals = gaussApprox(vals, (1 / state.R) / M.dln / 2.35482);
         }
         g.beginPath();
@@ -825,7 +831,7 @@ function draw() {
   syncWave(a0, a1);
   const round = v => (v >= 1000 ? (Math.round(v / 100) * 100).toLocaleString('en-US')
                                 : String(Math.round(v)));
-  $('#yminlabel').textContent = `${state.ymin.toFixed(2)} – 1.0`;
+  syncY();
   const waiting = P.some(q => (q.sp && !WHOLE[q.key])
     || (q.combined && q.combined.some(n => !WHOLE[n])));
   $('#reslabel').textContent = `R = ${round(state.R)}` + (waiting ? '   loading\u2026' : '');
@@ -969,7 +975,8 @@ function writeHash() {
   if (state.tell) p.push('tel=1');
   // the seed is deliberately NOT carried: every load is a fresh realization
   if (state.snr) p.push('snr=' + state.snr + ',' + state.ppre);
-  if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
+  if (state.ymin || Math.abs(state.ymax - 1.05) > 1e-9)
+    p.push('y=' + state.ymin.toFixed(2) + '-' + state.ymax.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
   const url = p.length ? '#' + p.join('&') : location.pathname + location.search;
@@ -999,7 +1006,11 @@ function readHash() {
     if (isFinite(q[0])) state.snr = Math.max(0, q[0]);
     if (q.length > 1 && isFinite(q[1])) state.ppre = Math.max(1, Math.round(q[1]));
   }
-  if (h.has('y')) { state.ymin = +h.get('y'); const el = $('#ymin'); if (el) el.value = Math.round(state.ymin * 100); }
+  if (h.has('y')) {
+    const q = h.get('y').split('-').map(Number);
+    if (isFinite(q[0])) state.ymin = q[0];
+    if (q.length > 1 && isFinite(q[1])) state.ymax = q[1];   // older links had only the floor
+  }
   if (h.has('w')) {
     const m = h.get('w').split('-').map(Number);
     if (m.length === 2 && isFinite(m[0]) && isFinite(m[1]) && m[1] > m[0]) {
@@ -1041,6 +1052,65 @@ function applyWaveInputs() {
   a = Math.max(0, Math.min(M.n - 40, a));
   b = Math.max(a + 40, Math.min(M.n, b));
   setView(a, b);
+}
+
+function syncY() {
+  const a = yPos(state.ymin), b = yPos(state.ymax);
+  $('#yh0').style.left = (100 * a) + '%';
+  $('#yh1').style.left = (100 * b) + '%';
+  const f = $('#yfill');
+  f.style.left = (100 * a) + '%';
+  f.style.width = (100 * (b - a)) + '%';
+  if (document.activeElement !== $('#ylo')) $('#ylo').value = state.ymin.toFixed(2);
+  if (document.activeElement !== $('#yhi')) $('#yhi').value = state.ymax.toFixed(2);
+}
+
+function setY(lo, hi) {
+  const gap = 0.05;
+  state.ymin = Math.min(Math.max(lo, YMIN_LO), YMAX_HI - gap);
+  state.ymax = Math.min(Math.max(hi, state.ymin + gap), YMAX_HI);
+  syncY(); deferHash(); scheduleDraw();
+}
+
+function wireY() {
+  const el = $('#yrange');
+  let mode = null, grab = 0;
+  const at = ev => {
+    const r = el.getBoundingClientRect();
+    return yVal((ev.clientX - r.left) / r.width);
+  };
+  const start = m => ev => {
+    mode = m; grab = at(ev) - state.ymin;
+    el.setPointerCapture(ev.pointerId);
+    ev.preventDefault(); ev.stopPropagation();
+  };
+  $('#yh0').addEventListener('pointerdown', start('lo'));
+  $('#yh1').addEventListener('pointerdown', start('hi'));
+  $('#yfill').addEventListener('pointerdown', start('pan'));
+  el.addEventListener('pointermove', ev => {
+    if (!mode) return;
+    const v = at(ev);
+    if (mode === 'lo') setY(v, state.ymax);
+    else if (mode === 'hi') setY(state.ymin, v);
+    else { const w = state.ymax - state.ymin; setY(v - grab, v - grab + w); }
+  });
+  const end = () => { mode = null; };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  const apply = () => {
+    const a = parseFloat($('#ylo').value), b = parseFloat($('#yhi').value);
+    if (isFinite(a) && isFinite(b)) setY(Math.min(a, b), Math.max(a, b));
+    else syncY();
+  };
+  for (const id of ['#ylo', '#yhi']) {
+    const f = $(id);
+    f.addEventListener('focus', () => f.select());
+    f.addEventListener('change', apply);
+    f.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { apply(); f.blur(); }
+      if (ev.key === 'Escape') { f.blur(); syncY(); }
+    });
+  }
 }
 
 function wireWave() {
@@ -1538,10 +1608,7 @@ async function main() {
   if (hv) { state.i0 = Math.max(0, hv[0]); state.i1 = Math.min(M.n, hv[1]); }
   $('#reset').addEventListener('click', () => setView(0, M.n));
   wireWave();
-  $('#ymin').addEventListener('input', e => {
-    state.ymin = +e.target.value / 100;      // upper limit stays pinned at 1
-    scheduleDraw(); deferHash();
-  });
+  wireY();
   $('#res').addEventListener('input', e => {
     state.R = posToR(+e.target.value);
     syncSnr();

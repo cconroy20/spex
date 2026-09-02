@@ -74,6 +74,14 @@ raw = {t: np.load(HERE / 'cache' / f'{t}_lineindex.npz', allow_pickle=True)
        for t in tags}
 spec = {t: np.load(HERE / 'cache' / f'{t}_species.npz') for t in tags}
 names = [str(x) for x in raw[tags[0]]['names']]
+for t in tags[1:]:
+    other = [str(x) for x in raw[t]['names']]
+    if other != names:
+        raise SystemExit(f'{t}: species list differs from {tags[0]}; rebuild both')
+    for i in range(len(names)):
+        if len(raw[t][f'{i}_depth']) != len(raw[tags[0]][f'{i}_lam']):
+            raise SystemExit(f'{t}: {names[i]} has a different line count; '
+                             'rebuild both with the same starcfg')
 lam_vac = spec[tags[0]]['lam_vac']
 lam0 = float(lam_vac[0])
 dln = float(np.median(np.diff(np.log(lam_vac))))

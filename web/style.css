@@ -135,7 +135,9 @@ input.wend{font:inherit;font-size:.92rem;font-variant-numeric:tabular-nums;
 input.wend:hover{border-color:var(--line)}
 input.wend:focus{outline:none;border-color:var(--atom);color:var(--ink);
   background:var(--panel)}
-#wlo{text-align:right}
+#wlo,#ylo{text-align:right}
+#ylo,#yhi{width:5ch}
+#yrange{width:220px}
 
 .fsw{display:inline-flex;align-items:center;gap:7px;font-size:.92rem;
   margin-left:6px}

@@ -12,6 +12,8 @@ GFALL = Path.home() / 'kurucz' / 'atlas12' / 'data' / 'gfallvac08oct17.dat'
 OUT = Path(__file__).resolve().parent / 'cache' / 'species'
 OUT.mkdir(parents=True, exist_ok=True)
 
+LAM_LO, LAM_HI = 3540.0, 25010.0        # the band build_lines.py indexes
+
 codes = sys.argv[1:]
 want = {f'{float(c):6.2f}': c for c in codes}
 fh = {c: open(OUT / f'gf_{c}.dat', 'w') for c in codes}
@@ -28,9 +30,10 @@ for line in open(GFALL, errors='replace'):
         w = float(line[0:11]) * 10.0
     except ValueError:
         continue
-    if 3540.0 <= w <= 10010.0:
+    if LAM_LO <= w <= LAM_HI:
         inband[c] += 1
 for f in fh.values():
     f.close()
 for c in codes:
-    print(f'  {c:>6s}  {n[c]:9,d} records  {inband[c]:8,d} in 3540-10010 A')
+    print(f'  {c:>6s}  {n[c]:9,d} records  {inband[c]:8,d} in '
+          f'{LAM_LO:.0f}-{LAM_HI:.0f} A')

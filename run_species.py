@@ -1,4 +1,4 @@
-"""Per-species solar spectra over 3800-10000 A."""
+"""Per-species solar spectra from specflux, the python cross-check."""
 import sys, time
 from pathlib import Path
 import numpy as np

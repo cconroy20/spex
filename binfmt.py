@@ -24,6 +24,26 @@ import numpy as np
 
 MAGIC = b'SPC1'
 CHUNK = 16384
+OV_BIN = 52                 # native points per overview bin, ~11,000 bins
+
+
+def q16(y, lo, hi):
+    """uint16 over a fixed range: 1.8e-5 in normalized flux, half of float32."""
+    return np.clip((y - lo) / (hi - lo) * 65535.0, 0, 65535).astype('<u2')
+
+
+def decimate(y, n=OV_BIN):
+    """min, max and mean per bin, concatenated into one array.
+
+    The envelope is what makes a zoomed-out spectrum honest: at 200 native
+    points per screen pixel, plotting a mean washes the line forest away,
+    while min/max shows the real depth range inside the pixel.  The mean is
+    kept for the smoothed display modes.  The tail short of a whole bin is
+    dropped, which is what makes len(y) // OV_BIN the bin count.
+    """
+    m = (len(y) // n) * n
+    b = y[:m].reshape(-1, n)
+    return np.concatenate([b.min(axis=1), b.max(axis=1), b.mean(axis=1)])
 
 
 def encode_chunk(a):

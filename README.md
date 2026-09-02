@@ -1,8 +1,12 @@
 # The solar spectrum, 3600-10000 A
 
-Pedagogical figure set. Four quantities, all for the same ATLAS12 solar model
-(`~/kurucz/grids/THESUN/atm/ap00t5777g4.44at12.dat`, Teff 5777, log g 4.44,
-72 depths, v_turb 2 km/s):
+Pedagogical figure set, plus the pipeline behind the interactive atlas in
+`web/`. The synthesis itself now runs 3549-24993 A for five stars; the figures
+here are cut to 3600-10000 A and are the Sun alone.
+
+Four quantities, all for the same ATLAS12 solar model (Teff 5777, log g 4.44,
+v_turb 2 km/s; `starcfg.py` names the deck, and all five stars were regenerated
+with the current ATLAS12 so every deck carries 80 layers and a TAU5000 column):
 
 1. the fluxed spectrum,
 2. the continuum-normalized spectrum,
@@ -59,8 +63,8 @@ TrueType, not Type 3. Molecular species are drawn in amber, atomic in blue.
 
 ## How each panel is computed
 
-**Panels 1-3 are SYNTHE.** `run_synthe.sh` drives `$ATLAS12/bin/synthe.exe`
-over 355-1000 nm at R = 300,000 in 26 chunks of 25 nm (chunking is for memory:
+**Panels 1-3 are SYNTHE.** `run_star.sh` drives `$ATLAS12/bin/synthe.exe`
+over 355-2500 nm at R = 300,000 in 86 chunks of 25 nm (chunking is for memory:
 the full line list runs to ~10 million lines per chunk in the blue, 3.2 GB).
 The blue end reaches past the Balmer break at 3646 A, where the continuum steps
 by a factor of 1.211; the figures are cut at 3600 A, leaving margin below it.
@@ -68,17 +72,24 @@ Full line list -- gfall, Kurucz's predicted lines, and every molecule in
 `data/lines.list`. `assemble.py` stitches the chunks, converts to air
 wavelengths and to F_lambda = 4 pi H_nu c / lambda^2, and validates.
 
-**Panel 4 is one SYNTHE run per species** (`run_species_synthe.sh`). SYNTHE's
+**Panel 4 is one SYNTHE run per species** (the second half of `run_star.sh`;
+`run_species_synthe.sh` is the earlier solar-only driver that produced the
+25-species cache the committed figures were drawn from). SYNTHE's
 line list cannot be filtered by species through its interface, but it reads
 whatever file `lines.list` names, so splitting gfall by species code into
 `cache/species/` and pointing a private `lines.list` at each one isolates a
 species exactly. Molecules were already one file per species in `data/mol/`.
 Each run covers the whole band in one pass -- a single species is only
-~10^4-10^5 lines, so it needs no chunking and takes 8 s.  Extending the blue
-end therefore costs one extra chunk for panels 1-3 and a 4-minute re-run of the
-25 species; the per-species gfall files are split by species code over the whole
-line list, not by wavelength, so nothing needs re-extracting. `assemble_species.py`
-collects them.
+~10^4-10^5 lines, so it needs no chunking and takes 8 s.  Extending the band
+therefore means extra chunks for panels 1-3 and a re-run of the species; the
+per-species gfall files are split by species code over the whole line list, not
+by wavelength, so nothing needs re-extracting. `assemble_species.py` collects
+them into `cache/<tag>_species.npz`.
+
+`makefigs.py` prefers `cache/species_flux_synthe.npz`, the 25-species
+3550-10000 A set the committed PDFs were drawn from, and falls back to
+`cache/<tag>_species.npz` from the current pipeline. Nothing in the repository
+regenerates the former.
 
 This matters most for **hydrogen**. gfall holds only 82 H I records in the band
 (the Balmer series plus a Paschen pile-up near the limit) with no Stark or van
@@ -127,10 +138,11 @@ Fe I 0.99, Ca II 0.97, Mg I 1.03, Na I 1.05, Ca I 0.97, Ti I 0.99, Cr I 0.98,
 Ni I 0.99, Fe II 0.99, CH 0.93, CN 0.94, MgH 1.16 -- and H I 0.29, the
 Voigt-versus-Holtsmark gap.
 
-Panels 1-3 against the Sun: the band holds 63.1% of sigma Teff^4, as it should
-for 5777 K; line blanketing removes 14.1% of the flux; F_lambda(5000 A) = 1.01e7
-erg/s/cm^2/A. Ratios to the IAG solar flux atlas are 0.97 (Mg b), 1.04 (Na D),
-1.00 (Ca II IR triplet).
+Panels 1-3 against the Sun: over the figure band, 3600-10000 A, the synthesis
+holds 65.6% of sigma Teff^4 and line blanketing removes 14.0% of the flux; over
+the full 3549-25043 A synthesis those become 93.1% and 11.1%. The continuum at
+5000 A is 1.069e7 erg/s/cm^2/A. Ratios to the IAG solar flux atlas are 0.97
+(Mg b), 1.04 (Na D), 1.00 (Ca II IR triplet).
 
 ## Caveats
 
@@ -156,21 +168,38 @@ erg/s/cm^2/A. Ratios to the IAG solar flux atlas are 0.97 (Mg b), 1.04 (Na D),
 
 ## Interactive version
 
-`web/` is a self-contained static site of the same synthesis, ready for GitHub
-Pages: species toggles, drag-to-zoom, an observed-Sun overlay, a resolution
-selector, and a URL that tracks the view so a link can point at one line.
-18 MB, 65 files. See `web/README.md`. Rebuild its data with `export_web.py`.
+`web/` is a self-contained static site of the same synthesis, live at
+https://cconroy20.github.io/spex/ : five stars, 51 species each over
+3549-24993 A, drag-to-zoom, a resolution selector from R = 300,000 down to
+1,000, telluric and blackbody overlays, formation depths, simulated photon
+noise, line identification on hover, and a URL that tracks the view so a link
+can point at one line. 30 MB, 828 files. See `web/README.md`. Rebuild its data
+with `export_web.py`, `pack_lines.py` and `export_telluric.py`, and publish it
+with `deploy.sh`.
 
 ## Files
 
-    run_synthe.sh      panels 1-3: chunked SYNTHE driver
-    assemble.py        stitch + validate -> cache/sun_synthe.npz
+    starcfg.py         the five stars and the 51 species, in one table
+    split_gfall.py     gfall -> one file per species code, in cache/species/
+    run_star.sh        every SYNTHE run one star needs: EOS, chunks, species
+    assemble.py        stitch + validate -> cache/<tag>_synthe.npz
+    assemble_species.py  per-species runs -> cache/<tag>_species.npz
+    reduce_linform.py  .linform -> one formation depth per wavelength
+    assemble_form.py   stitch those -> cache/<tag>_form.npz
     sunlib.py          model, continuum, line lists, SYNTHE's damping defaults
     moldisp.py         parses SYNTHE's molec_dispatch isotope table
-    specflux.py        per-species formal solution
+    specflux.py        per-species formal solution, kept as a cross-check
     run_species.py     driver -> cache/species_flux.npz
     accumulate.py      optional: line OPACITY per species at tau_5000 = 1
     run_diag.sh        line-list ablation (gfall / +predicted / +molecules)
-    makefigs.py        the three figures
-    export_web.py      data bundle for the interactive site in web/
+    makefigs.py        the figures
     plotstyle.py       house style
+
+    binfmt.py          the SPC1 container the browser reads
+    export_web.py      one star's spectra -> web/data/<tag>/
+    export_telluric.py ESO SkyCalc transmission -> web/data/telluric*.bin
+    build_lines.py     predicted central depths -> cache/<tag>_lineindex.npz
+    pack_lines.py      shared catalogue + per-star depths -> web/data/lines/
+    assess_lines.py    how much the catalogue grows across stars
+    assess_compression.py  container variants, measured
+    deploy.sh          publish web/ to gh-pages as a single commit

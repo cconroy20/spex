@@ -29,7 +29,8 @@ OUT = HERE / 'web' / 'data' / ST['tag']
 (OUT / 'full').mkdir(parents=True, exist_ok=True)
 
 NORM_MAX = 1.2                      # normalized flux quantization range
-OV_BIN = 52                         # ~6000 points in the overview tier
+OV_BIN = binfmt.OV_BIN
+q16, decimate = binfmt.q16, binfmt.decimate
 
 # formation depth: where tau_lambda = 1, in both of the units worth reading it
 # in.  Fixed quantization ranges so every star decodes the same way.
@@ -38,23 +39,6 @@ FTEMP_LO, FTEMP_HI = 0.0, 12000.0   # K
 
 GROUPS = [(g, [n for _, n, gg, *_ in species() if gg == g])
           for g in GROUP_ORDER]
-
-
-def q16(y, lo, hi):
-    return np.clip((y - lo) / (hi - lo) * 65535.0, 0, 65535).astype('<u2')
-
-
-def decimate(y, n=OV_BIN):
-    """min, max and mean per bin.
-
-    The envelope is what makes a zoomed-out spectrum honest: at 200 native
-    points per screen pixel, plotting a mean washes the line forest away,
-    while min/max shows the real depth range inside the pixel.  The mean is
-    kept for the smoothed display modes.
-    """
-    m = (len(y) // n) * n
-    b = y[:m].reshape(-1, n)
-    return np.concatenate([b.min(axis=1), b.max(axis=1), b.mean(axis=1)])
 
 
 d = np.load(HERE / 'cache' / f'{ST["tag"]}_species.npz')
@@ -114,17 +98,17 @@ if have_form:
     write('_ftemp', fe, FTEMP_LO, FTEMP_HI)
     # plot range per star, from the data rather than a guess: the 0.2nd
     # percentile keeps a handful of extreme cores from flattening everything
-    def rng(v, q, step):
+    def rng(v, step):
         lo = np.floor(np.percentile(v, 0.2) / step) * step
-        hi = np.ceil(np.percentile(v, 100 - q) / step) * step
+        hi = np.ceil(v.max() / step) * step
         return [float(lo), float(hi)]
-    form_range = {'_ftau': rng(ft, 0.0, 0.5), '_ftemp': rng(fe, 0.0, 250.0)}
+    form_range = {'_ftau': rng(ft, 0.5), '_ftemp': rng(fe, 250.0)}
 else:
     form_range = {}
     print('  (no formation depths yet)')
 
 meta = dict(
-    n=n, n_ov=len(norm) // OV_BIN, ov_bin=OV_BIN, ov_channels=3,
+    n=n, n_ov=n_ov, ov_bin=OV_BIN, ov_channels=3,
     lam0_vac=float(lam_vac[0]), dln=dln,
     lam_air_min=float(air[0]), lam_air_max=float(air[-1]),
     norm_max=NORM_MAX, flux_max=FLUX_MAX,
@@ -150,7 +134,7 @@ for sub in ('full', 'ov'):
             print(f'  removed stale {sub}/{f.name}')
 
 (OUT / 'meta.json').write_text(json.dumps(meta, indent=1))
-print(f'{len(written)} series, n={n} (overview {meta["n_ov"]} x3), '
+print(f'{len(written)} series, n={n} (overview {n_ov} x3), '
       f'grid {air[0]:.1f}-{air[-1]:.1f} A air')
 tot = sum(f.stat().st_size for f in OUT.rglob('*'))
 print(f'bundle {tot/1e6:.1f} MB   (overview tier '

@@ -44,10 +44,17 @@
     <span class="hint" id="reslabel"></span>
   </div>
   <div class="row">
-    <label class="resctl">Flux range
-      <input type="range" id="ymin" min="0" max="95" step="1" value="0">
-    </label>
-    <span class="hint" id="yminlabel"></span>
+    <label>Flux range</label>
+    <input class="wend" id="ylo" inputmode="decimal" spellcheck="false"
+           title="click to type a value">
+    <div id="yrange" class="dual">
+      <div class="track"></div>
+      <div class="fill" id="yfill"></div>
+      <div class="h" id="yh0"></div>
+      <div class="h" id="yh1"></div>
+    </div>
+    <input class="wend" id="yhi" inputmode="decimal" spellcheck="false"
+           title="click to type a value">
     <span class="fsw">Top panel
       <button id="flam" class="seg on">F<sub>&lambda;</sub></button><button
               id="fnu" class="seg">F<sub>&nu;</sub></button>

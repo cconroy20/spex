@@ -48,13 +48,11 @@ t = np.interp(grid, lam_vac, trans, left=1.0, right=1.0)
 
 OUT = HERE / 'web' / 'data'
 OUT.mkdir(parents=True, exist_ok=True)
-q = np.clip(t * 65535.0, 0, 65535).astype('<u2')
-n_ov = len(grid) // 52
-binfmt.write_series(OUT / 'telluric.bin', q)
-b = np.concatenate([x.reshape(-1, 52).min(axis=1) for x in (q[:n_ov * 52],)]
-                   + [q[:n_ov * 52].reshape(-1, 52).max(axis=1),
-                      q[:n_ov * 52].reshape(-1, 52).mean(axis=1)]).astype('<u2')
-binfmt.write_series(OUT / 'telluric_ov.bin', b, chunk=n_ov)
+# the same two tiers, and the same bin size, as every stellar series
+n_ov = len(grid) // binfmt.OV_BIN
+binfmt.write_series(OUT / 'telluric.bin', binfmt.q16(t, 0.0, 1.0))
+binfmt.write_series(OUT / 'telluric_ov.bin',
+                    binfmt.q16(binfmt.decimate(t), 0.0, 1.0), chunk=n_ov)
 
 air = R.vac_to_air(grid)
 print(f'telluric: {len(grid):,} points on the shared grid, '
