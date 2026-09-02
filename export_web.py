@@ -31,6 +31,11 @@ OUT = HERE / 'web' / 'data' / ST['tag']
 NORM_MAX = 1.2                      # normalized flux quantization range
 OV_BIN = 52                         # ~6000 points in the overview tier
 
+# formation depth: where tau_lambda = 1, in both of the units worth reading it
+# in.  Fixed quantization ranges so every star decodes the same way.
+FTAU_LO, FTAU_HI = -8.0, 1.0        # log tau_5000
+FTEMP_LO, FTEMP_HI = 0.0, 12000.0   # K
+
 GROUPS = [(g, [n for _, n, gg, *_ in species() if gg == g])
           for g in GROUP_ORDER]
 
@@ -98,12 +103,24 @@ for k, y in series.items():
 write('_cont', cont, 0.0, FLUX_MAX)
 write('_norm', norm, 0.0, NORM_MAX)
 
+fp = HERE / 'cache' / f'{ST["tag"]}_form.npz'
+have_form = fp.exists()
+if have_form:
+    fz = np.load(fp)
+    fa = R.vac_to_air(fz['lam_vac'])
+    write('_ftau', np.interp(air, fa, fz['logtau5000']), FTAU_LO, FTAU_HI)
+    write('_ftemp', np.interp(air, fa, fz['tform']), FTEMP_LO, FTEMP_HI)
+else:
+    print('  (no formation depths yet)')
+
 meta = dict(
     n=n, n_ov=len(norm) // OV_BIN, ov_bin=OV_BIN, ov_channels=3,
     lam0_vac=float(lam_vac[0]), dln=dln,
     lam_air_min=float(air[0]), lam_air_max=float(air[-1]),
     norm_max=NORM_MAX, flux_max=FLUX_MAX,
     fmt='SPC1', chunk=binfmt.CHUNK, derived=['_flux'],
+    form=have_form,
+    qrange={'_ftau': [FTAU_LO, FTAU_HI], '_ftemp': [FTEMP_LO, FTEMP_HI]},
     star=ST['tag'], name=ST['name'],
     model=dict(teff=ST['teff'], logg=ST['logg'], feh=ST['feh'],
                afe=ST.get('afe', 0.0), name='ATLAS12 / SYNTHE, Kurucz'),

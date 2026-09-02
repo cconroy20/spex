@@ -29,12 +29,20 @@ if [ ! -s "$OUT/eos/$STEM.mol" ]; then
   echo "eos: $(ls $d | tr '\n' ' ')"
 fi
 
+# more_output=yes also gives .linform, the monochromatic optical depth at every
+# layer for every wavelength -- that is where the formation depths come from.
+# dump_lines=no is essential: the used-line dump it would otherwise write is
+# ~1 GB for a 25 nm window, against 13 MB for the .linform we actually want.
+# Each chunk is reduced to one formation depth per wavelength and the .linform
+# deleted straight away, so the disk never holds more than one.
 for (( w=355; w<2500; w+=25 )); do
   d=$OUT/chunks/w${w}
-  [ -s "$d/$STEM.spec" ] && continue
+  [ -s "$d/form.npz" ] && continue
   rm -rf $d; mkdir -p $d
   ( cd $d && ATLAS12=$A $A/bin/synthe.exe "$MODEL" wlbeg=$w wlend=$((w+25)) \
-      resolu=300000 > log 2>&1 )
+      resolu=300000 more_output=yes dump_lines=no > log 2>&1 )
+  python3 $BASE/reduce_linform.py "$d" "$STEM" "$MODEL" > /dev/null
+  rm -f "$d/$STEM.mol"
   echo "  chunk ${w}: $(wc -l < $d/$STEM.spec) pts $(grep -m1 'Lines:' $d/log | tr -s ' ')"
 done
 

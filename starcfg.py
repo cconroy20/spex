@@ -12,7 +12,9 @@ GRIDS = Path.home() / 'kurucz' / 'grids'
 STARS = {
     'sun': dict(
         name='Sun', sp='G2 V', teff=5777, logg=4.44, feh=0.0, afe=0.0,
-        model=GRIDS / 'THESUN' / 'atm' / 'ap00t5777g4.44at12.dat'),
+        # regenerated with the current ATLAS12 so all five decks match: 80
+        # layers and a TAU5000 column, which the formation depths read
+        model=HERE / 'run' / 'atm' / 'sun' / 'sun.atm'),
     'procyon': dict(
         name='Procyon', sp='F5 IV-V', teff=6530, logg=3.96, feh=0.0, afe=0.0,
         model=HERE / 'run' / 'atm' / 'procyon' / 'procyon.atm'),
