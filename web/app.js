@@ -10,7 +10,7 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false };
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: SNR_OFF, ppre: 3 };
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -18,6 +18,52 @@ const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individu
    made is theirs and carries across; an untouched one is replaced. */
 let pristine = true;
 const CANG = 2.99792458e18;          // speed of light, A/s
+
+/* ---------------------------------------------------------------------
+   Observed-spectrum simulation: SNR per pixel at a fixed sampling.
+   HOOKED UP BUT NOT YET DRAWN -- see README, "Simulated observation".
+
+   A detector pixel is not the model grid.  The model is one sample per
+   resolution element at R = 300,000; a spectrograph at resolution R with p
+   pixels per resolution element samples every 300000/(R*p) model points, so
+   the pixel grid is coarser than the model only while R*p < 300,000.  Above
+   that the request is not physically meaningful and has to be refused rather
+   than silently interpolated, or the "noise" becomes correlated between
+   neighbouring pixels and reads as smooth wiggles.
+
+   Noise is photon noise, so the quoted SNR is per pixel IN THE CONTINUUM and
+   falls as sqrt(F) into a line: a core at 10% of the continuum carries less
+   than a third of the continuum's signal-to-noise.  Quoting a flat SNR across
+   the line would make deep cores look far better measured than they are.
+
+   The realization is deterministic in the pixel's absolute index, so panning
+   and zooming move the noise WITH the spectrum instead of reshuffling it.
+   ------------------------------------------------------------------ */
+const SNR_OFF = 0;
+
+function pixelStep(R, perElem) {
+  return R_NATIVE / (R * perElem);          // model points per detector pixel
+}
+function pixelGridOK(R, perElem) {
+  return pixelStep(R, perElem) >= 1.0;      // else pixels are finer than the model
+}
+
+// two independent uniforms from one integer, then Box-Muller
+function hash01(i, salt) {
+  let x = (Math.imul(i ^ salt, 2654435761) ^ 0x9e3779b9) >>> 0;
+  x ^= x >>> 15; x = Math.imul(x, 2246822519); x ^= x >>> 13;
+  x = Math.imul(x, 3266489917); x ^= x >>> 16;
+  return (x >>> 8) / 16777216;              // (0,1)
+}
+function gaussAt(pix) {
+  const u = Math.max(hash01(pix, 0x1234), 1e-12), v = hash01(pix, 0x5678);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/* sigma on a normalized flux f, for a continuum signal-to-noise of snr */
+function sigmaAt(f, snr) {
+  return snr > 0 ? Math.sqrt(Math.max(f, 1e-4)) / snr : 0;
+}
 let FNU_MAX = 0;                     // peak of the continuum in F_nu
 
 /* F_nu = F_lam * lam^2 / c.  Both modes keep the same axis range, so only the
@@ -808,6 +854,7 @@ function writeHash() {
   if (state.bb) p.push('bb=1');
   if (state.form !== 'off') p.push('fd=' + state.form);
   if (state.tell) p.push('tel=1');
+  if (state.snr) p.push('snr=' + state.snr + ',' + state.ppre);
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
@@ -833,6 +880,11 @@ function readHash() {
   if (h.has('bb')) state.bb = true;
   if (h.has('fd')) state.form = h.get('fd') === 'temp' ? 'temp' : 'tau';
   if (h.has('tel')) state.tell = true;
+  if (h.has('snr')) {
+    const q = h.get('snr').split(',').map(Number);
+    if (isFinite(q[0])) state.snr = Math.max(0, q[0]);
+    if (q.length > 1 && isFinite(q[1])) state.ppre = Math.max(1, Math.round(q[1]));
+  }
   if (h.has('y')) { state.ymin = +h.get('y'); const el = $('#ymin'); if (el) el.value = Math.round(state.ymin * 100); }
   if (h.has('w')) {
     const m = h.get('w').split('-').map(Number);
