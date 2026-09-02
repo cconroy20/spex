@@ -18,12 +18,9 @@
 
 <div id="controls">
   <div class="row">
-    <button id="reset">Reset zoom</button>
-    <span class="hint vals"><span>drag the box edges to resize</span><span>drag
-      inside it to pan</span><span>drag outside for a new range</span><span>double-click
-      the plot to reset</span></span>
+    <button id="reset" title="Back to the wavelength range, resolution, flux range, species and display options this star opens with">Reset</button>
   </div>
-  <canvas id="brush" height="54"></canvas>
+  <canvas id="brush" height="54" title="drag the box edges to resize · drag inside it to pan · drag outside for a new range · double-click the plot to reset"></canvas>
   <div class="row">
     <label>Wavelength</label>
     <input class="wend" id="wlo" inputmode="decimal" spellcheck="false"

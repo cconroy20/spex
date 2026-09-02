@@ -10,7 +10,7 @@ const CHUNK = 16384;          // native points per fetched chunk
 const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', AMBER = '#B26B00';
 let M = null, OV = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, ymax: 1.05, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, ymax: 1.08, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -45,6 +45,12 @@ const CANG = 2.99792458e18;          // speed of light, A/s
 /* Flux range: both ends move, like the wavelength control.  The span reaches
    2.0 because noise at low S/N genuinely goes there. */
 const YMIN_LO = 0, YMAX_HI = 2.0;
+/* Where the top of the flux range sits when nobody has dragged it: enough room
+   for four sigma of noise, or the 8% the panels have always left, whichever is
+   larger.  Changing a noise setting snaps back to this, because otherwise the
+   slider keeps claiming a top the axis is no longer using. */
+const autoYmax = () => Math.min(YMAX_HI, 1 + Math.max(0.08,
+  (state.snr > 0 && pixelGridOK(state.R, state.ppre)) ? 4 / state.snr : 0));
 const yPos = v => (v - YMIN_LO) / (YMAX_HI - YMIN_LO);
 const yVal = f => YMIN_LO + Math.min(Math.max(f, 0), 1) * (YMAX_HI - YMIN_LO);
 
@@ -658,10 +664,11 @@ function draw() {
     /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
        0.08: with a fixed top the continuum slid down the panel as the floor
        came up, so the one line you read everything against kept moving. */
-    // the user sets the top; noise only ever raises it, never lowers it
+    // the slider is the single source of truth for the top; a change of noise
+    // setting resets it, so the two can never disagree
     const vmax = isFlux ? (M.flux_max / 1e7) * (1 + nhead)
       : isForm ? frng[1] - fq
-      : Math.max(state.ymax, noisy ? 1 + nhead : 0);
+      : state.ymax;
     const Y = v => y0 + h - ((v - vmin) / (vmax - vmin)) * h;
 
     // y ticks
@@ -975,7 +982,7 @@ function writeHash() {
   if (state.tell) p.push('tel=1');
   // the seed is deliberately NOT carried: every load is a fresh realization
   if (state.snr) p.push('snr=' + state.snr + ',' + state.ppre);
-  if (state.ymin || Math.abs(state.ymax - 1.05) > 1e-9)
+  if (state.ymin || Math.abs(state.ymax - autoYmax()) > 1e-9)
     p.push('y=' + state.ymin.toFixed(2) + '-' + state.ymax.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
@@ -1606,7 +1613,24 @@ async function main() {
   buildChips();
   wireBrush(); wirePlot(); loadLineIndex();
   if (hv) { state.i0 = Math.max(0, hv[0]); state.i1 = Math.min(M.n, hv[1]); }
-  $('#reset').addEventListener('click', () => setView(0, M.n));
+  /* Reset means everything this star opens with, not just the zoom: the view,
+     the resolution, the flux range, the species, and every display option.
+     The star itself stays. */
+  $('#reset').addEventListener('click', () => {
+    state.i0 = 0; state.i1 = M.n;
+    state.R = R_NATIVE; $('#res').value = rToPos(R_NATIVE);
+    state.snr = 0; state.ppre = 3;
+    state.ymin = 0; state.ymax = autoYmax();
+    state.on.clear();
+    M.default_on.forEach(n => state.on.add(n));
+    pristine = true;
+    setFlux(false); setBB(false); setForm('off'); setTell(false);
+    setMode('individual');
+    $('#snr').value = posFromSnr(0);
+    document.querySelectorAll('.seg.pp').forEach(x =>
+      x.classList.toggle('on', +x.dataset.p === state.ppre));
+    syncSnr(); syncY(); buildChips(); deferHash(); refresh();
+  });
   wireWave();
   wireY();
   $('#res').addEventListener('input', e => {
@@ -1653,13 +1677,15 @@ async function main() {
   };
   $('#snr').addEventListener('input', e => {
     state.snr = snrFromPos(+e.target.value);
-    syncSnr(); deferHash(); scheduleDraw();
+    state.ymax = autoYmax();
+    syncSnr(); syncY(); deferHash(); scheduleDraw();
   });
   for (const b of document.querySelectorAll('.seg.pp')) {
     b.addEventListener('click', () => {
       state.ppre = +b.dataset.p;
       document.querySelectorAll('.seg.pp').forEach(x => x.classList.toggle('on', x === b));
-      syncSnr(); deferHash(); scheduleDraw();
+      state.ymax = autoYmax();
+      syncSnr(); syncY(); deferHash(); scheduleDraw();
     });
   }
   $('#reseed').addEventListener('click', () => {
