@@ -2,25 +2,34 @@
 
 An interactive atlas of model stellar spectra, computed line by line and split
 into the contribution of each atom and molecule — what a star would look like if
-only Fe I, or Ca II, or CH absorbed. The Sun (3550–10000 Å) is the first model
-loaded; the layout is built to take others.
+only Fe I, or Ca II, or CH absorbed. Five stars from an F dwarf to an M dwarf,
+each over 3549–24993 Å.
 
-**Live: https://USER.github.io/REPO/**
+Live: https://cconroy20.github.io/spex/
 
-- Toggle any of 25 species on or off.
+- Toggle any of 51 species on or off.
 - Drag the strip under the header to zoom; scroll or drag on the plot to pan.
-- Degrade to any resolving power from R = 300,000 down to R = 3,000.
+- Degrade to any resolving power from R = 300,000 down to R = 1,000.
+- Overlay telluric transmission, a blackbody, formation depth, or photon noise
+  at a chosen signal-to-noise.
 - The URL tracks the view, so a link points at one line:
-  `#w=5885-5900&s=Fe%20I,Na%20I`
+  `#w=5885.00-5900.00&s=41`
 
 ## What is being plotted
 
-A 1D LTE synthesis with Kurucz's ATLAS12 and SYNTHE on a solar model atmosphere
-(Teff 5777 K, log g 4.44, [Fe/H] 0, v_turb 2 km/s), at R = 300,000, using the
-`gfall` atomic line list and sixteen molecular line lists.
+A 1D LTE synthesis with Kurucz's ATLAS12 and SYNTHE, at R = 300,000, using the
+`gfall` atomic line list and sixteen molecular line lists. The five models:
 
-Each species panel is a **separate run of the radiative transfer** with only
-that species' lines in the line list — the panels are computed, not estimated by
+| star | Teff | log g | [Fe/H] | [α/Fe] |
+|---|---|---|---|---|
+| Sun | 5777 | 4.44 | 0.00 | 0.0 |
+| Procyon | 6530 | 3.96 | 0.00 | 0.0 |
+| HD 122563 | 4587 | 1.61 | −2.64 | 0.4 |
+| Arcturus | 4286 | 1.66 | −0.52 | 0.3 |
+| Barnard's Star | 3220 | 5.05 | −0.40 | 0.0 |
+
+Each species panel is a separate run of the radiative transfer with only that
+species' lines in the line list — the panels are computed, not estimated by
 scaling or differencing. SYNTHE has no species filter, but it reads whatever
 file `lines.list` names, so `gfall` was split by species code and each species
 given a line list of its own.
@@ -33,16 +42,32 @@ given a line list of its own.
 - The H I panel steps at the Balmer limit (3646 Å): SYNTHE partitions hydrogen
   opacity there, lines redward and bound-free continuum blueward. Neither half
   is physical alone; their sum is continuous.
+- Sr II, Ba II, Nd II and Eu II are synthesized and drawn, but are missing from
+  the line catalogue, so the tooltip does not name their lines. See "Line
+  identification" below.
 
 ## How the site works
 
 No server logic — it is static files, one directory per star under `data/`,
-plus a shared `data/lines/` catalogue. Each series has two tiers:
+plus a shared `data/lines/` catalogue and a shared `data/telluric*.bin`. Each
+star carries 55 series (51 species, the continuum, the full synthesis, and two
+formation-depth arrays) in two tiers:
 
 | tier | contents |
 |---|---|
-| `data/<star>/ov/` | decimated ~5,974 bins, min/max/mean per bin, loaded up front |
-| `data/<star>/full/` | native 310,691 points, fetched per series on zoom |
+| `data/<star>/ov/` | decimated to 11,261 bins of 52 points, min/max/mean per bin |
+| `data/<star>/full/` | native 585,579 points |
+
+The overview tier paints the first frame and carries a zoomed-out view on its
+own, since its stored min/max is the exact min/max of the raw samples over
+whole bins. It cannot represent a resolution finer than 52 native points,
+which caps it at R ≈ 5,800.
+
+Everything past that reads the native tier, and `ensure()` fetches it whole for
+every selected series rather than by range: each setting of the resolution
+control is a live convolution of the real samples, so the array is needed in
+full whatever the zoom. First load is 2.5 MB for the Sun and 4.3 MB for
+Barnard's Star, on top of the overview tier.
 
 The wavelength grid is uniform in ln λ, so it is reconstructed in the browser
 from `(lam0_vac, dln, n)` rather than stored, and converted to air wavelengths
@@ -65,13 +90,24 @@ sum with the same wraparound, so this is exact, not lossy.
     payload deflate(hi_bytes || lo_bytes) per chunk
 
 Each chunk is deflated on its own, which costs about 5% against compressing
-the whole file and keeps HTTP Range landing on a chunk boundary. The browser
+the whole file and leaves the chunk boundaries addressable. The browser
 inflates with `DecompressionStream('deflate')` — Safari 16.4+, Chrome 80+,
 Firefox 113+; there is no uncompressed fallback.
 
-Measured on the shipped bundles: 13.1x for the Sun, 15.8x Procyon, 10.5x
-Arcturus, 32.8x HD 122563. The ratio rises with the number of species,
-because most species are flat in any one star and flat costs nothing.
+Measured on the shipped bundles:
+
+| star | native tier | overview | line depths | ratio |
+|---|---|---|---|---|
+| Sun | 4.20 MB | 564 kB | 0.34 MB | 15.3x |
+| Procyon | 3.61 MB | 513 kB | 0.22 MB | 17.9x |
+| Arcturus | 4.95 MB | 621 kB | 0.53 MB | 13.0x |
+| HD 122563 | 1.63 MB | 274 kB | 0.14 MB | 39.5x |
+| Barnard's Star | 6.95 MB | 648 kB | 0.71 MB | 9.3x |
+
+plus 3.56 MB of shared catalogue, for 30 MB and 828 files in all. The ratio
+tracks how many species are flat in that star: HD 122563 is metal-poor and
+compresses by 39.5x, Barnard's Star has a spectrum full of molecules and
+compresses by 9.3x.
 
 `_flux` is not shipped at all. It is `_norm` x `_cont`, and rebuilding it in
 the browser from the two quantized arrays agrees with the real thing to two
@@ -81,18 +117,15 @@ quantization steps — below anything that can be drawn. See `DERIVED` in
 `.nojekyll` is required: several data files begin with an underscore, and
 GitHub Pages' Jekyll step would otherwise drop them.
 
-`.nojekyll` is required: several data files begin with an underscore, and
-GitHub Pages' Jekyll step would otherwise drop them.
-
 ## Adding a star
 
 The header carries one card per star. Everything the app fetches hangs off
-`DB`, the data root, so a second star is a directory of the same shape as
-`data/` plus a row in the `STARS` table in `app.js` giving it a `dir`. The
-three cards without one are placeholders, and their parameters are nominal
-literature values — replace them with whatever the models are actually
-computed at. The Sun's card reads its numbers from `meta.json`, not from the
-table.
+`DB`, the data root, so a second star is a directory of the same shape as the
+five under `data/` plus a row in the `STARS` table in `app.js` giving it a
+`dir`. Build the directory with `run_star.sh`, `assemble.py`,
+`assemble_species.py`, `assemble_form.py`, `export_web.py` and `pack_lines.py`;
+see the pipeline README one level up. The cards read their parameters from the
+`STARS` table, except the star on show, which reads them from its `meta.json`.
 
 ## Simulated observation
 
@@ -136,34 +169,41 @@ by `build_lines.py` and `pack_lines.py` from the same Kurucz records the
 synthesis read — no separate catalogue, so a line the tooltip names is a line
 that is actually in the spectrum.
 
-There are 6.0 million lines in the band, far too many to ship, so each is
+There are millions of lines in the band, far too many to ship, so each is
 given a predicted central depth against the continuum, computed with the
-single-depth machinery in `sunlib.py`, and only those above 0.2% survive.
+single-depth machinery in `sunlib.py`, and only those above 0.2% in at least
+one of the five stars survive. That union runs to 488,665 lines, against
+360,782 for Barnard's Star, the richest single star.
 
 The catalogue half — wavelength, species, log gf, χ, level labels — is a
-property of the atom and identical for every star, so it is built once over
-the union of every star's visible lines and shipped at `data/lines/`; each
-star adds only two depth bytes per line at `data/<star>/lines/`. The union
-turns out to be barely larger than the richest single star (229,759 against
-Arcturus's 223,802), because the strong lines of an F dwarf and a metal-poor
-giant are close to a subset of a cool giant's. That makes sharing nearly
-free: 1.5 MB once, plus 0.08–0.32 MB per star, against 20.7 MB of per-star
-JSON before.
+property of the atom and identical for every star, so it is built once over the
+union and shipped at `data/lines/` in 44 blocks of 500 Å; each star adds only
+two depth bytes per line at `data/<star>/lines/`. That makes sharing nearly
+free: 3.56 MB once, plus 0.14–0.71 MB per star.
 
-The depth is evaluated at **two** reference depths, τ = 1 and τ = 0.1, and the
+Coverage is 45 of the 51 species. TiO and H₂O are excluded deliberately: both
+ship as multi-gigabyte binaries with no text form, and naming one rotational
+line out of 97 million is not the point. Sr II, Ba II, Nd II and Eu II are
+excluded by a defect rather than by choice — `LineOpacity.n_over_U` in
+`sunlib.py` returns None for Z = 38, 56, 60 and 63, because the model deck's
+abundance table stops at Zn and SYNTHE's `.mol` EOS dump covers only Y, Zr and
+La above Z = 30. Their predicted depth comes out exactly zero for every line,
+and `pack_lines.py` drops any species with nothing above the cut. The panels
+themselves are unaffected, since they come from SYNTHE.
+
+The depth is evaluated at two reference depths, τ = 1 and τ = 0.1, and the
 larger is kept. Ranking on τ = 1 alone (T = 6518 K) dissociates the molecules
 and threw away CN lines that SYNTHE puts at 10% depth — CN completeness went
-from 54% to 99.6% when the second depth was added. Against the synthesized
-per-species spectra, every species now has ≥ 98.5% of its minima deeper than
-2% matched to an indexed line within 0.03 Å.
+from 54% to 99.6% when the second depth was added.
 
-Two depths are carried per line. The **predicted** depth ranks candidates:
-lines inside one blend share a measured depth and would tie, while the
-predicted depth is per line and separates them. The **measured** depth, read
-off that species' synthesized spectrum, is what the tooltip reports, so the
-number agrees with the trace on screen. Distance from the cursor is folded in
-with a Gaussian of half the pick tolerance, so pointing at a line picks that
-line rather than a deeper one a few pixels away.
+Two depths are carried per line. The measured depth, read off that species'
+synthesized spectrum, ranks the candidates, and the predicted depth breaks the
+ties: lines inside one blend share a measured depth, while the predicted depth
+is per line and separates them. Predicted depth alone let a line the synthesis
+puts at zero outrank a real one — SiH beat the CO bandhead at 2.3 μm that way.
+Distance from the cursor is folded in with a Gaussian of half the pick
+tolerance, so pointing at a line picks that line rather than a deeper one a few
+pixels away.
 
 Molecules are named by band, not by rotational line: `A–X (1,1)`, decoded from
 the state letter and vibrational quantum numbers in the level codes. Hydrogen
@@ -182,7 +222,7 @@ themselves as a polyline. Reducing to min/max in that regime puts a vertical
 excursion at every sample, which reads as an undersampled line even though the
 grid carries 9-16 points across a line FWHM (measured: Fe I 6252 has 10,
 Fe I 5232 has 16, against a Nyquist requirement of 2). Above that threshold,
-each panel shows the **min-max range within one screen sample**, drawn as
+each panel shows the min-max range within one screen sample, drawn as
 vertical strokes: one object, rather than a band outline (which reads as two
 lines) or a mean (which is invariant to any smoothing finer than a pixel, so
 the resolution control appeared to do nothing when zoomed out). Samples are
@@ -204,20 +244,32 @@ Do not time this in headless Chrome with `--virtual-time-budget`: the clock is
 frozen, `performance.now()` never advances, and every measurement comes back
 0.00 ms (or worse, a plausible-looking wrong number). Use node. The
 readout reports what is actually on screen: the limit is the data tier, not
-the pixel, because a min-max band does show sub-pixel structure. The overview
-tier bins 52 native points, so it caps at R ~ 5,800; below that the app must
-zoom in far enough to pull native data.
+the pixel, because a min-max band does show sub-pixel structure.
+
+## Local testing
+
+    python3 serve.py 8731
+
+`serve.py` sends no-cache headers, without which a browser holds a stale
+`app.js` against new markup and the page collapses in a way that looks like a
+bug in the code being edited. It also honours Range, so the container's chunk
+boundaries can still be exercised.
 
 ## Publishing
 
-    git init && git add -A && git commit -m "Interactive solar spectrum atlas"
-    git branch -M main
-    git remote add origin git@github.com:USER/REPO.git
-    git push -u origin main
+    ./deploy.sh
 
-Then in the repository settings, Pages → Deploy from a branch → `main` / root.
+The bundle is ~30 MB of binaries rewritten wholesale on every export, so the
+script rebuilds `gh-pages` from scratch as a single orphan commit and
+force-pushes it: the branch never accumulates history, and `web/data/` stays
+out of `main` entirely. It also stamps the current commit onto the `app.js`
+and `style.css` URLs, because Pages serves HTML and assets with the same
+ten-minute max-age and caches them independently — without the stamp a browser
+can hold new markup against an old script, and the new controls appear with
+nothing wired to them. Set Pages to deploy from the `gh-pages` branch at root.
 
 ## Credits
 
 Synthesis: ATLAS12 and SYNTHE, R. L. Kurucz; `gfall` line list; Barklem &
-Collet (2016) partition functions. Built from the `sunspec` pipeline.
+Collet (2016) partition functions. Telluric transmission: ESO SkyCalc (Noll et
+al. 2012; Jones et al. 2013).

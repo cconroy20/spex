@@ -39,9 +39,12 @@ const CANG = 2.99792458e18;          // speed of light, A/s
    The realization is deterministic in the pixel's absolute index, so panning
    and zooming move the noise WITH the spectrum instead of reshuffling it.
    ------------------------------------------------------------------ */
-const snrFromPos = q => (q <= 0 ? 0 : Math.round(5 * Math.pow(200, (q - 1) / 99)));
-const posFromSnr = v => (v <= 0 ? 0
-  : Math.max(1, Math.min(100, Math.round(1 + 99 * Math.log(v / 5) / Math.log(200)))));
+/* The slider runs the way the quantity does: worst data at the left, and the
+   right-hand end is no noise at all rather than a switch that happens to sit
+   next to the lowest S/N. */
+const snrFromPos = q => (q >= 100 ? 0 : Math.round(5 * Math.pow(200, q / 99)));
+const posFromSnr = v => (v <= 0 ? 100
+  : Math.max(0, Math.min(99, Math.round(99 * Math.log(v / 5) / Math.log(200)))));
 
 function pixelStep(R, perElem) {
   return R_NATIVE / (R * perElem);          // model points per detector pixel
@@ -1576,7 +1579,7 @@ async function main() {
   };
   const syncSnr = () => {
     const ok = pixelGridOK(state.R, state.ppre);
-    $('#snrlabel').textContent = !state.snr ? 'off'
+    $('#snrlabel').textContent = !state.snr ? 'S/N = \u221e'
       : ok ? `S/N = ${fmt(state.snr)}`
       : `S/N = ${fmt(state.snr)}  \u2014  needs R \u00d7 pixels \u2264 ${fmt(R_NATIVE)}`;
     $('#reseed').disabled = !state.snr || !ok;
