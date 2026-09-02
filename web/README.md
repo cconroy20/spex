@@ -116,6 +116,13 @@ falls as sqrt(F) into a line: at S/N 100, a core at 10% of the continuum has
 S/N 31.  A flat S/N across the line would make deep cores look far better
 measured than they are.
 
+The two noisy panels grow their upper limit as 4/(S/N) once that beats the 8%
+they already leave above the continuum, so a noise excursion is never clipped:
+with a thousand pixels across a panel the largest is routinely three and a
+half sigma, and clipping it would hide exactly the scatter the control exists
+to show.  Nothing else moves -- the formation and species panels keep their
+own ranges.
+
 Within one realization the noise is deterministic in the pixel's absolute
 index, so panning and zooming carry it with the spectrum instead of
 reshuffling it every frame.  The seed itself is random on every load and on

@@ -569,6 +569,14 @@ function draw() {
     const fq = isForm ? qfloor(fname) : 0;
     const frng = isForm ? (M.form_range || {})[fname] || [0, 1] : null;
     const fnu = isFlux && state.fnu && FNU_MAX > 0;
+    const noisy = state.snr > 0 && pixelGridOK(state.R, state.ppre)
+      && (q.key === '_fluxpanel' || q.key === '_norm');
+    /* Room above the continuum for the noise to go.  Four sigma, because with
+       a thousand pixels across the panel the largest excursion is routinely
+       three and a half; clipping it would hide exactly the scatter the S/N
+       control exists to show.  Only the two panels that carry noise, and only
+       when it beats the 8% the panels already leave. */
+    const nhead = noisy ? 4 / state.snr : 0;
     // lam^2/c at a screen sample, and at a native index
     const lamOf = j => M.lam0_vac * Math.exp(j * M.dln);
     const facS = i => (fnu ? (l => l * l / CANG)(lamOf(state.i0 + (state.i1 - state.i0) * (i + 0.5) / NS)) : 1);
@@ -577,8 +585,9 @@ function draw() {
     /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
        0.08: with a fixed top the continuum slid down the panel as the floor
        came up, so the one line you read everything against kept moving. */
-    const vmax = isFlux ? M.flux_max / 1e7
-      : isForm ? frng[1] - fq : vmin + 1.08 * (1.0 - vmin);
+    const vmax = isFlux ? (M.flux_max / 1e7) * (1 + nhead)
+      : isForm ? frng[1] - fq
+      : vmin + (1 + Math.max(0.08, nhead)) * (1.0 - vmin);
     const Y = v => y0 + h - ((v - vmin) / (vmax - vmin)) * h;
 
     // y ticks
@@ -606,8 +615,6 @@ function draw() {
     g.restore();
 
     const fluxScale = fnu ? M.flux_max / (1e7 * FNU_MAX) : 1 / 1e7;
-    const noisy = state.snr > 0 && pixelGridOK(state.R, state.ppre)
-      && (q.key === '_fluxpanel' || q.key === '_norm');
     // the formation panel is convolved with the same kernel as the spectra:
     // it was inconsistent otherwise, smoothed on the polyline path but not on
     // the min/max one, so which you got depended on the zoom
