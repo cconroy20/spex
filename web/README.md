@@ -94,47 +94,33 @@ literature values — replace them with whatever the models are actually
 computed at. The Sun's card reads its numbers from `meta.json`, not from the
 table.
 
-## Simulated observation (hooked up, not yet drawn)
+## Simulated observation
 
-State, URL round-trip and the numerical helpers are in `app.js`
-(`pixelStep`, `pixelGridOK`, `gaussAt`, `sigmaAt`); nothing draws noise yet.
-`state.snr` is the continuum signal-to-noise per pixel, 0 for off, and
-`state.ppre` the pixels per resolution element; both ride in the URL as
-`snr=<value>,<pixels>`.
-
-Three decisions are already made, because they are the ones that would be
-wrong if left to a default:
+A continuum signal-to-noise per pixel and a fixed number of pixels per
+resolution element, drawn as a noisy curve on the flux and all-lines panels --
+the two that correspond to something a telescope could record.  A species
+panel is a decomposition, not an observable, so it stays clean.
 
 A detector pixel is not the model grid.  The model is one sample per
 resolution element at R = 300,000, so a spectrograph at resolution R with p
 pixels per element steps `300000/(R*p)` model points.  That is only a
-coarsening while `R*p < 300,000` — at R = 300,000 with 3 pixels per element
-the step is 0.33 and the request is meaningless.  `pixelGridOK` reports this;
-it must be refused rather than interpolated, or neighbouring pixels share
-model points and the noise comes out correlated, reading as smooth wiggles
-rather than noise.
+coarsening while `R*p < 300,000`; above it the pixel would be finer than the
+model, neighbouring pixels would share model points, and the "noise" would
+come out correlated and read as smooth wiggles.  `pixelGridOK` refuses that
+case and the control says so rather than drawing something untrue.  One model
+point is sampled per pixel rather than averaging the span -- cheaper, and the
+difference is invisible once noise is on top.
 
-The noise is photon noise, so the quoted SNR is per pixel **in the continuum**
-and falls as sqrt(F) into a line: at SNR 100, a core at 10% of the continuum
-has SNR 31.  A flat SNR across the line would make deep cores look far better
-measured than they are, which is exactly backwards for a teaching tool.
+The noise is photon noise, so the quoted S/N is per pixel IN THE CONTINUUM and
+falls as sqrt(F) into a line: at S/N 100, a core at 10% of the continuum has
+S/N 31.  A flat S/N across the line would make deep cores look far better
+measured than they are.
 
-The realization is deterministic in the pixel's absolute index (`gaussAt`),
-so panning and zooming carry the noise with the spectrum instead of
-reshuffling it on every frame.
-
-Open, and worth deciding before wiring it to the canvas:
-
-- Which panels.  Only the observables — "all lines", "combined", possibly the
-  flux panel — since an individual species panel is a decomposition, not
-  something a telescope can record.
-- Whether a pixel should average the model points it spans rather than sample
-  one of them.  A real pixel integrates, so averaging is right, and it also
-  removes model structure the instrument could not have resolved.
-- How to present it: a noisy trace replacing the clean one, or the clean curve
-  with a +/-1 sigma band.
-- What to do when `R*p` exceeds 300,000 — clamp R, clamp p, or disable the
-  control with a note.
+Within one realization the noise is deterministic in the pixel's absolute
+index, so panning and zooming carry it with the spectrum instead of
+reshuffling it every frame.  The seed itself is random on every load and on
+every press of `resample noise`, and is deliberately NOT carried in the URL:
+a shared link reproduces the configuration, not the particular draw.
 
 ## Line identification
 

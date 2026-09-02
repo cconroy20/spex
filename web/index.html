@@ -62,6 +62,18 @@
     <span class="fsw"><button id="tell" class="seg lone"
       title="ESO SkyCalc molecular transmission, airmass 1, 2.5 mm PWV">telluric</button></span>
   </div>
+  <div class="row">
+    <label class="resctl">S/N per pixel
+      <input type="range" id="snr" min="0" max="100" step="1" value="0">
+    </label>
+    <span class="hint" id="snrlabel"></span>
+    <span class="fsw">pixels per element
+      <button class="seg pp" data-p="2">2</button><button
+              class="seg pp on" data-p="3">3</button><button
+              class="seg pp" data-p="4">4</button>
+    </span>
+    <button id="reseed" class="seg lone">resample noise</button>
+  </div>
 </div>
 
 <div id="main">

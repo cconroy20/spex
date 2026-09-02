@@ -10,7 +10,7 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3 };   // snr 0 = off
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off', tell: false, snr: 0, ppre: 3, seed: (Math.random() * 4294967296) >>> 0 };  // snr 0 = off
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -39,6 +39,10 @@ const CANG = 2.99792458e18;          // speed of light, A/s
    The realization is deterministic in the pixel's absolute index, so panning
    and zooming move the noise WITH the spectrum instead of reshuffling it.
    ------------------------------------------------------------------ */
+const snrFromPos = q => (q <= 0 ? 0 : Math.round(5 * Math.pow(200, (q - 1) / 99)));
+const posFromSnr = v => (v <= 0 ? 0
+  : Math.max(1, Math.min(100, Math.round(1 + 99 * Math.log(v / 5) / Math.log(200)))));
+
 function pixelStep(R, perElem) {
   return R_NATIVE / (R * perElem);          // model points per detector pixel
 }
@@ -53,8 +57,9 @@ function hash01(i, salt) {
   x = Math.imul(x, 3266489917); x ^= x >>> 16;
   return (x >>> 8) / 16777216;              // (0,1)
 }
-function gaussAt(pix) {
-  const u = Math.max(hash01(pix, 0x1234), 1e-12), v = hash01(pix, 0x5678);
+function gaussAt(pix, seed) {
+  const u = Math.max(hash01(pix, 0x1234 ^ seed), 1e-12);
+  const v = hash01(pix, 0x5678 ^ seed);
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
@@ -601,6 +606,8 @@ function draw() {
     g.restore();
 
     const fluxScale = fnu ? M.flux_max / (1e7 * FNU_MAX) : 1 / 1e7;
+    const noisy = state.snr > 0 && pixelGridOK(state.R, state.ppre)
+      && (q.key === '_fluxpanel' || q.key === '_norm');
     // the formation panel is convolved with the same kernel as the spectra:
     // it was inconsistent otherwise, smoothed on the polyline path but not on
     // the min/max one, so which you got depended on the zoom
@@ -622,6 +629,34 @@ function draw() {
       // again on the polyline path
       const arrC = comb ? combinedNative(comb, state.R) : null;
       if (comb && !arrC) continue;                 // still loading
+      /* A simulated observation: sample ONE model point per detector pixel,
+         add photon noise, and draw the result as a curve.  Only the flux and
+         all-lines panels, the two that correspond to something a telescope
+         could record. */
+      if (noisy && nm !== '_cont') {
+        const src = smoothedNative(nm, state.R);
+        const cont = nm === '_flux' ? smoothedNative('_cont', state.R) : null;
+        if (src && (nm !== '_flux' || cont)) {
+          const step = pixelStep(state.R, state.ppre);
+          const k0 = Math.floor(state.i0 / step), k1 = Math.ceil(state.i1 / step);
+          g.beginPath();
+          let st = false;
+          for (let k = k0; k <= k1; k++) {
+            const jc = (k + 0.5) * step;
+            const j = Math.round(jc);
+            if (j < 0 || j >= M.n) { st = false; continue; }
+            const c = cont ? cont[j] : 1;
+            const f = c > 0 ? src[j] / c : 0;      // normalized, so sigma is sqrt(f)/snr
+            const v = (f + sigmaAt(f, state.snr) * gaussAt(k, state.seed)) * c;
+            const xx = padL + (jc - state.i0) / (state.i1 - state.i0) * W;
+            const yy = Y(v * scale * facJ(j));
+            st ? g.lineTo(xx, yy) : g.moveTo(xx, yy);
+            st = true;
+          }
+          g.stroke();
+          continue;
+        }
+      }
       if (nm === '_cont') {                       // the continuum is smooth
         const e = envelope(nm, state.i0, state.i1, NS, useFull);
         g.beginPath();
@@ -854,6 +889,7 @@ function writeHash() {
   if (state.bb) p.push('bb=1');
   if (state.form !== 'off') p.push('fd=' + state.form);
   if (state.tell) p.push('tel=1');
+  // the seed is deliberately NOT carried: every load is a fresh realization
   if (state.snr) p.push('snr=' + state.snr + ',' + state.ppre);
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
@@ -1197,6 +1233,25 @@ function showTip(ev) {
 
   const i = state.i0 + x / gm.W * (state.i1 - state.i0);
   const lam = idxAir(i);
+
+  /* Over the telluric panel, report only its own absorption.  Naming a
+     stellar line there would be answering a question nobody asked: the
+     feature under the cursor is in Earth's atmosphere, not the star's. */
+  if (hit && hit.tell) {
+    const a = smoothedNative(TELL, state.R);
+    const j = a ? Math.max(0, Math.min(a.length - 1, Math.round(i))) : -1;
+    tip.innerHTML = `<b>${lam.toFixed(3)} &#8491;</b>`
+      + (j >= 0 ? `<div class="par vals"><span>telluric depth = `
+                  + `${(1 - a[j]).toFixed(3)}</span></div>` : '');
+    tip.style.display = 'block';
+    mark.style.display = 'none';
+    const tw0 = tip.offsetWidth || 200;
+    tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - tw0 - 10) + 'px';
+    tip.style.top = Math.min(ev.clientY + 16,
+                             window.innerHeight - tip.offsetHeight - 8) + 'px';
+    return;
+  }
+
   const tol = Math.abs(idxAir(i + 3 * (state.i1 - state.i0) / gm.W) - lam);
   const res = findLines(lam, tol, allow);
 
@@ -1418,6 +1473,7 @@ async function main() {
   });
   $('#res').addEventListener('input', e => {
     state.R = posToR(+e.target.value);
+    syncSnr();
     refresh(); deferHash();       // may still need the native arrays
 
   });
@@ -1450,6 +1506,32 @@ async function main() {
     $('#tell').classList.toggle('on', v);
     deferHash(); refresh();
   };
+  const syncSnr = () => {
+    const ok = pixelGridOK(state.R, state.ppre);
+    $('#snrlabel').textContent = !state.snr ? 'off'
+      : ok ? `S/N = ${fmt(state.snr)}`
+      : `S/N = ${fmt(state.snr)}  \u2014  needs R \u00d7 pixels \u2264 ${fmt(R_NATIVE)}`;
+    $('#reseed').disabled = !state.snr || !ok;
+  };
+  $('#snr').addEventListener('input', e => {
+    state.snr = snrFromPos(+e.target.value);
+    syncSnr(); deferHash(); scheduleDraw();
+  });
+  for (const b of document.querySelectorAll('.seg.pp')) {
+    b.addEventListener('click', () => {
+      state.ppre = +b.dataset.p;
+      document.querySelectorAll('.seg.pp').forEach(x => x.classList.toggle('on', x === b));
+      syncSnr(); deferHash(); scheduleDraw();
+    });
+  }
+  $('#reseed').addEventListener('click', () => {
+    state.seed = (Math.random() * 4294967296) >>> 0;
+    deferHash(); scheduleDraw();
+  });
+  $('#snr').value = posFromSnr(state.snr);
+  document.querySelectorAll('.seg.pp').forEach(x =>
+    x.classList.toggle('on', +x.dataset.p === state.ppre));
+  syncSnr();
   $('#tell').addEventListener('click', () => setTell(!state.tell));
   if (state.tell) setTell(true);
   $('#foff').addEventListener('click', () => setForm('off'));
