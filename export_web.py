@@ -108,9 +108,19 @@ have_form = fp.exists()
 if have_form:
     fz = np.load(fp)
     fa = R.vac_to_air(fz['lam_vac'])
-    write('_ftau', np.interp(air, fa, fz['logtau5000']), FTAU_LO, FTAU_HI)
-    write('_ftemp', np.interp(air, fa, fz['tform']), FTEMP_LO, FTEMP_HI)
+    ft = np.interp(air, fa, fz['logtau5000'])
+    fe = np.interp(air, fa, fz['tform'])
+    write('_ftau', ft, FTAU_LO, FTAU_HI)
+    write('_ftemp', fe, FTEMP_LO, FTEMP_HI)
+    # plot range per star, from the data rather than a guess: the 0.2nd
+    # percentile keeps a handful of extreme cores from flattening everything
+    def rng(v, q, step):
+        lo = np.floor(np.percentile(v, 0.2) / step) * step
+        hi = np.ceil(np.percentile(v, 100 - q) / step) * step
+        return [float(lo), float(hi)]
+    form_range = {'_ftau': rng(ft, 0.0, 0.5), '_ftemp': rng(fe, 0.0, 250.0)}
 else:
+    form_range = {}
     print('  (no formation depths yet)')
 
 meta = dict(
@@ -121,6 +131,7 @@ meta = dict(
     fmt='SPC1', chunk=binfmt.CHUNK, derived=['_flux'],
     form=have_form,
     qrange={'_ftau': [FTAU_LO, FTAU_HI], '_ftemp': [FTEMP_LO, FTEMP_HI]},
+    form_range=form_range,
     star=ST['tag'], name=ST['name'],
     model=dict(teff=ST['teff'], logg=ST['logg'], feh=ST['feh'],
                afe=ST.get('afe', 0.0), name='ATLAS12 / SYNTHE, Kurucz'),

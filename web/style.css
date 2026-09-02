@@ -145,5 +145,8 @@ input.wend:focus{outline:none;border-color:var(--atom);color:var(--ink);
 .fsw .seg:first-of-type{border-radius:4px 0 0 4px}
 .fsw .seg:nth-of-type(2){border-radius:0 4px 4px 0;margin-left:-1px}
 .fsw .seg.lone{border-radius:4px;margin-left:10px}
+.fsw .seg.fm{border-radius:0;margin-left:-1px}
+.fsw .seg.fm:first-of-type{border-radius:4px 0 0 4px;margin-left:0}
+.fsw .seg.fm:last-of-type{border-radius:0 4px 4px 0}
 .seg.on{background:var(--atom);color:#fff;border-color:var(--atom)}
 .seg.on:hover{background:var(--atom)}

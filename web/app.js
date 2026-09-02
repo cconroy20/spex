@@ -10,7 +10,7 @@ const FULL_MAX = 80000;       // window size below which we use native data
 const ATOM = '#004C8C', MOL = '#B26B00', INK = '#1a1a1a', GREY = '#a9a49b',
       AMBER = '#B26B00';
 let M = null, OV = {}, CH = {}, WHOLE = {};
-const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false };
+const state = { i0: 0, i1: 1, on: new Set(), R: 300000, ymin: 0, mode: 'individual', fnu: false, bb: false, form: 'off' };
 /* Whether the species selection is still whatever the star opened with.  The
    default set is chosen per star from what actually absorbs, so switching to
    Barnard while carrying the Sun's list leaves TiO, MgH and CaH off -- the
@@ -93,9 +93,24 @@ const airIdx = a => Math.log(air2vac(a) / M.lam0_vac) / M.dln;
 
 /* ---------- data ---------- */
 const dec = (u, name) => {
+  const q = M.qrange && M.qrange[name];
+  if (q) return (q[1] - q[0]) / 65535;          // formation depths: floor is not 0
   const hi = (name === '_flux' || name === '_cont') ? M.flux_max : M.norm_max;
   return hi / 65535;
 };
+// the decoders above drop the floor, so the panel works in (value - floor)
+const qfloor = name => ((M.qrange && M.qrange[name]) ? M.qrange[name][0] : 0);
+
+/* yTicks' ladder stops at 1, which is right for normalized flux and useless
+   for a temperature axis.  This one walks the decade. */
+function niceTicks(lo, hi, want) {
+  const span = hi - lo, n = want || 5;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(span / n, 1e-12))));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(x => span / x <= n + 0.5) || 10 * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(v);
+  return { ticks: out, dp: Math.max(0, -Math.floor(Math.log10(step) + 1e-9)) };
+}
 /* Series arrive as SPC1: the array first-differenced, its byte planes split,
    and each 16,384-point chunk deflated on its own so a Range request still
    lands on a chunk boundary.  See binfmt.py for the container. */
@@ -418,6 +433,7 @@ const PANEL_H = 132;              // every panel the same height
 function panels() {
   const p = [{ key: '_fluxpanel', h: PANEL_H, label: 'flux' },
              { key: '_norm', h: PANEL_H, label: 'normalized' }];
+  if (state.form !== 'off' && M.form) p.push({ key: '_form', h: PANEL_H, form: state.form });
   if (state.mode === 'combined') {
     const sel = M.series.filter(s => state.on.has(s.name)).map(s => s.name);
     if (sel.length) p.push({ key: '_combined', h: PANEL_H, combined: sel });
@@ -486,25 +502,31 @@ function draw() {
     g.strokeStyle = line; g.lineWidth = 1;
     g.strokeRect(x0 + .5, y0 + .5, W, h);
     const isFlux = q.key === '_fluxpanel';
+    const isForm = q.key === '_form';
+    const fname = q.form === 'temp' ? '_ftemp' : '_ftau';
+    const fq = isForm ? qfloor(fname) : 0;
+    const frng = isForm ? (M.form_range || {})[fname] || [0, 1] : null;
     const fnu = isFlux && state.fnu && FNU_MAX > 0;
     // lam^2/c at a screen sample, and at a native index
     const lamOf = j => M.lam0_vac * Math.exp(j * M.dln);
     const facS = i => (fnu ? (l => l * l / CANG)(lamOf(state.i0 + (state.i1 - state.i0) * (i + 0.5) / NS)) : 1);
     const facJ = j => (fnu ? (l => l * l / CANG)(lamOf(j)) : 1);
-    const vmin = isFlux ? 0 : state.ymin;
+    const vmin = isFlux ? 0 : isForm ? frng[0] - fq : state.ymin;
     /* Headroom above the continuum is 8% of the DISPLAYED range, not a fixed
        0.08: with a fixed top the continuum slid down the panel as the floor
        came up, so the one line you read everything against kept moving. */
-    const vmax = isFlux ? M.flux_max / 1e7 : vmin + 1.08 * (1.0 - vmin);
+    const vmax = isFlux ? M.flux_max / 1e7
+      : isForm ? frng[1] - fq : vmin + 1.08 * (1.0 - vmin);
     const Y = v => y0 + h - ((v - vmin) / (vmax - vmin)) * h;
 
     // y ticks
     g.fillStyle = css.getPropertyValue('--muted').trim() || '#777';
     g.textAlign = 'right'; g.textBaseline = 'middle';
-    const tk = isFlux ? { ticks: [0, 0.5, 1.0], dp: 1 } : yTicks(vmin, 1.0);
+    const tk = isFlux ? { ticks: [0, 0.5, 1.0], dp: 1 }
+      : isForm ? niceTicks(frng[0], frng[1], 5) : yTicks(vmin, 1.0);
     for (const t of tk.ticks) {
-      const yy = Y(t); if (yy < y0 - 1 || yy > y0 + h + 1) continue;
-      g.fillText(t.toFixed(tk.dp), x0 - 8, yy);
+      const yy = Y(t - fq); if (yy < y0 - 1 || yy > y0 + h + 1) continue;
+      g.fillText(isForm && Math.abs(t) >= 1000 ? fmt(t) : t.toFixed(tk.dp), x0 - 8, yy);
       g.strokeStyle = line; g.beginPath(); g.moveTo(x0, yy); g.lineTo(x0 + 4, yy); g.stroke();
     }
 
@@ -514,12 +536,15 @@ function draw() {
     g.translate(x0 - 56, y0 + h / 2);
     g.rotate(-Math.PI / 2);
     g.textBaseline = 'middle';
-    const ylab = isFlux ? [{ t: 'F' }, { t: fnu ? '\u03bd' : '\u03bb', sub: true }] : [{ t: 'norm.' }];
+    const ylab = isFlux ? [{ t: 'F' }, { t: fnu ? '\u03bd' : '\u03bb', sub: true }]
+      : isForm ? (q.form === 'temp' ? [{ t: 'T  (K)' }]
+                                    : [{ t: 'log \u03c4' }, { t: '5000', sub: true }])
+      : [{ t: 'norm.' }];
     subText(g, ylab, runsWidth(g, ylab, FS) / 2, 0, FS);
     g.restore();
 
     const fluxScale = fnu ? M.flux_max / (1e7 * FNU_MAX) : 1 / 1e7;
-    const series = isFlux ? ['_flux', '_cont'] : [q.key];
+    const series = isFlux ? ['_flux', '_cont'] : isForm ? [fname] : [q.key];
     const comb = q.combined || null;
     // clip to the PANEL BOX: the polyline deliberately runs a couple of points
     // past each edge so the trace enters and leaves cleanly, and those would
@@ -580,7 +605,7 @@ function draw() {
            stroke between samples, which read as chunky. */
         const e = arrC
           ? minMax(j => arrC[j], arrC.length, state.i0, state.i1, NS)
-          : band(nm, state.i0, state.i1, NS, useFull, state.R);
+          : band(nm, state.i0, state.i1, NS, useFull, isForm ? R_NATIVE : state.R);
         g.beginPath();
         let st = false;
         for (let i = 0; i < NS; i++) {
@@ -610,6 +635,7 @@ function draw() {
     // label
     g.fillStyle = ink; g.textBaseline = 'bottom';
     const runs = isFlux ? (state.bb ? [{ t: `blackbody, T = ${M.model.teff} K` }] : null)
+      : isForm ? [{ t: 'formation depth, \u03c4' }, { t: '\u03bb', sub: true }, { t: ' = 1' }]
       : q.key === '_norm' ? [{ t: 'all lines' }]
       : comb ? [{ t: `${comb.length} species multiplied` }]
       : [{ t: q.key }];
@@ -689,6 +715,7 @@ function drawBrush() {
 async function ensure() {
   const useFull = (state.i1 - state.i0) <= FULL_MAX;
   const need = ['_flux', '_cont', '_norm'];
+  if (state.form !== 'off' && M.form) need.push(state.form === 'temp' ? '_ftemp' : '_ftau');
   for (const s of M.series) if (state.on.has(s.name)) need.push(s.name);
   await Promise.all(need.map(n => loadOv(n)));
   await Promise.all(need.map(n => getWhole(n)));   // every R convolves real samples
@@ -759,6 +786,7 @@ function writeHash() {
   if (state.mode === 'combined') p.push('m=c');
   if (state.fnu) p.push('f=nu');
   if (state.bb) p.push('bb=1');
+  if (state.form !== 'off') p.push('fd=' + state.form);
   if (state.ymin) p.push('y=' + state.ymin.toFixed(2));
   // Safari caps replaceState at 100 calls per 10 s and throws past it; the
   // URL is a convenience, so never let it take the render down with it
@@ -782,6 +810,7 @@ function readHash() {
   if (h.get('m') === 'c') state.mode = 'combined';
   if (h.get('f') === 'nu') state.fnu = true;
   if (h.has('bb')) state.bb = true;
+  if (h.has('fd')) state.form = h.get('fd') === 'temp' ? 'temp' : 'tau';
   if (h.has('y')) { state.ymin = +h.get('y'); const el = $('#ymin'); if (el) el.value = Math.round(state.ymin * 100); }
   if (h.has('w')) {
     const m = h.get('w').split('-').map(Number);
@@ -1309,6 +1338,17 @@ async function main() {
     $('#bb').classList.toggle('on', v);
     deferHash(); scheduleDraw();
   };
+  const setForm = v => {
+    state.form = v;
+    for (const [id, k] of [['foff', 'off'], ['ftau', 'tau'], ['ftemp', 'temp']]) {
+      $('#' + id).classList.toggle('on', k === v);
+    }
+    deferHash(); refresh();                  // may need a series it has not loaded
+  };
+  $('#foff').addEventListener('click', () => setForm('off'));
+  $('#ftau').addEventListener('click', () => setForm('tau'));
+  $('#ftemp').addEventListener('click', () => setForm('temp'));
+  if (state.form !== 'off') setForm(state.form);
   $('#bb').addEventListener('click', () => setBB(!state.bb));
   if (state.bb) setBB(true);
   $('#flam').addEventListener('click', () => setFlux(false));
