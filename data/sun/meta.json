@@ -1,0 +1,378 @@
+{
+ "n": 585579,
+ "n_ov": 11261,
+ "ov_bin": 52,
+ "ov_channels": 3,
+ "lam0_vac": 3550.0086,
+ "dln": 3.3333286983960875e-06,
+ "lam_air_min": 3548.99461024713,
+ "lam_air_max": 24993.120494834933,
+ "norm_max": 1.2,
+ "flux_max": 12345235.835829305,
+ "fmt": "SPC1",
+ "chunk": 16384,
+ "derived": [
+  "_flux"
+ ],
+ "form": true,
+ "qrange": {
+  "_ftau": [
+   -8.0,
+   1.0
+  ],
+  "_ftemp": [
+   0.0,
+   12000.0
+  ]
+ },
+ "form_range": {
+  "_ftau": [
+   -4.5,
+   0.5
+  ],
+  "_ftemp": [
+   4000.0,
+   7250.0
+  ]
+ },
+ "star": "sun",
+ "name": "Sun",
+ "model": {
+  "teff": 5777,
+  "logg": 4.44,
+  "feh": 0.0,
+  "afe": 0.0,
+  "name": "ATLAS12 / SYNTHE, Kurucz"
+ },
+ "groups": [
+  "light elements",
+  "iron peak",
+  "ions",
+  "neutron capture",
+  "molecules"
+ ],
+ "series": [
+  {
+   "name": "H I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.008605130795493743
+  },
+  {
+   "name": "Li I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 2.317266701856724e-07
+  },
+  {
+   "name": "C I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.000751337251424733
+  },
+  {
+   "name": "N I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 6.514415846758936e-06
+  },
+  {
+   "name": "O I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 3.333406757499713e-05
+  },
+  {
+   "name": "Na I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.0003179610710815073
+  },
+  {
+   "name": "Mg I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.0028378674319110564
+  },
+  {
+   "name": "Al I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.0004223777639720261
+  },
+  {
+   "name": "Si I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.002427578862298385
+  },
+  {
+   "name": "S I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.00015900968603421717
+  },
+  {
+   "name": "K I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 5.246922252799546e-05
+  },
+  {
+   "name": "Ca I",
+   "group": "light elements",
+   "kind": "atom",
+   "absorption": 0.0018642003248294792
+  },
+  {
+   "name": "Sc I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 8.334845009205782e-05
+  },
+  {
+   "name": "Ti I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.002563733414965852
+  },
+  {
+   "name": "V I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.0009199677548585861
+  },
+  {
+   "name": "Cr I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.004156012191130598
+  },
+  {
+   "name": "Mn I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.0017432428285344415
+  },
+  {
+   "name": "Fe I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.04120038396649661
+  },
+  {
+   "name": "Co I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.002070279219818727
+  },
+  {
+   "name": "Ni I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 0.0038748209233587794
+  },
+  {
+   "name": "Cu I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 5.622243954395145e-05
+  },
+  {
+   "name": "Zn I",
+   "group": "iron peak",
+   "kind": "atom",
+   "absorption": 3.560622899323462e-05
+  },
+  {
+   "name": "Mg II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 3.788972487284159e-05
+  },
+  {
+   "name": "Si II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 3.271544903493684e-05
+  },
+  {
+   "name": "Ca II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.0051513243480506565
+  },
+  {
+   "name": "Sc II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.000571028175423538
+  },
+  {
+   "name": "Ti II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.0018198977158127017
+  },
+  {
+   "name": "V II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.0005003494706490308
+  },
+  {
+   "name": "Cr II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.0006452108771610732
+  },
+  {
+   "name": "Mn II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 5.5181508330282014e-05
+  },
+  {
+   "name": "Fe II",
+   "group": "ions",
+   "kind": "atom",
+   "absorption": 0.0011038111502472692
+  },
+  {
+   "name": "Sr II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.00012754654384894426
+  },
+  {
+   "name": "Y II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.00037037188405808497
+  },
+  {
+   "name": "Zr II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.00043190498073675254
+  },
+  {
+   "name": "Ba II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.00024577251786139787
+  },
+  {
+   "name": "La II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.0001467059020157091
+  },
+  {
+   "name": "Nd II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 0.0005518899953010914
+  },
+  {
+   "name": "Eu II",
+   "group": "neutron capture",
+   "kind": "atom",
+   "absorption": 5.6754901318400997e-05
+  },
+  {
+   "name": "CH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.005280211173802951
+  },
+  {
+   "name": "CN",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0033334519565955123
+  },
+  {
+   "name": "C2",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0004915828868549132
+  },
+  {
+   "name": "MgH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0002959819017135379
+  },
+  {
+   "name": "SiH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0001269480589697336
+  },
+  {
+   "name": "CaH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 5.118191939157413e-07
+  },
+  {
+   "name": "CrH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0
+  },
+  {
+   "name": "FeH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 2.1791003418369925e-06
+  },
+  {
+   "name": "TiO",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0
+  },
+  {
+   "name": "VO",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0
+  },
+  {
+   "name": "CO",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.00029037160612455093
+  },
+  {
+   "name": "OH",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 5.7764981471586374e-05
+  },
+  {
+   "name": "H2O",
+   "group": "molecules",
+   "kind": "mol",
+   "absorption": 0.0
+  }
+ ],
+ "default_on": [
+  "Fe I",
+  "H I",
+  "CH",
+  "Ca II",
+  "Cr I",
+  "Ni I",
+  "CN",
+  "Mg I",
+  "Ti I",
+  "Si I",
+  "Co I",
+  "Ca I",
+  "Ti II",
+  "Mn I"
+ ]
+}

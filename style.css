@@ -1,0 +1,198 @@
+:root{
+  --ink:#1a1a1a; --muted:#666; --line:#d8d4cc; --bg:#faf8f4; --panel:#fff;
+  --atom:#004C8C; --mol:#B26B00; --accent:#8E2F6E;
+  --rule-h:13px;                       /* the spectral rule under the wordmark */
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.55 Charter,"PT Serif",Palatino,Georgia,"DejaVu Serif",serif;
+}
+#controls,#main,footer{max-width:1500px;margin:0 auto;padding:0 22px}
+/* The title, its one line of framing and Reset share the first line of the
+   bar; the stars have the second.  Between them they cost 70 px, against the
+   350 the masthead and five parameter cards used to take before the first
+   control appeared. */
+.bar{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;padding-top:14px}
+.mark{display:inline-block;font-size:2.05rem;letter-spacing:-.025em;
+  line-height:1.06;white-space:nowrap}
+.mark .wm{display:block}
+/* The rule under the wordmark is a real slice of the Sun: 5160-5200 A binned
+   to 150 columns, each one as dark as that bin is deep, so the three wide
+   lines are the Mg b triplet.  It is data rather than ornament, which is what
+   earns it the space.  Inline rather than a file so it takes its colour from
+   the text and follows the dark theme without a second request. */
+.rule{display:block;width:100%;height:var(--rule-h);margin-top:7px;
+  color:var(--ink);opacity:.78}
+.stand{font-size:.9rem;color:var(--muted);flex:1 1 24ch;min-width:0;
+  line-height:var(--rule-h)}
+.ghost{color:var(--muted);font-size:.82rem;flex:0 0 auto;
+  line-height:var(--rule-h);padding:3px 10px 0}
+/* wrapped onto its own row the tight leading would collide, so give it back */
+@media (max-width:900px){
+  .stand{line-height:1.45}
+}
+/* Stars as tabs.  Only the one on view spells out its parameters: five cards
+   of four numbers is a lot of ink for something clicked once a session. */
+.stars{display:flex;gap:2px;flex-wrap:wrap;margin:10px 0 8px}
+.star{
+  flex:0 0 auto;text-align:left;display:flex;align-items:baseline;gap:.4em;
+  padding:4px 9px;border:1px solid transparent;border-radius:5px;
+  background:transparent;cursor:pointer;font:inherit;color:var(--ink);
+}
+.star:hover{background:#f0ece4}
+.star .nm{font-size:.94rem;letter-spacing:-.01em}
+.star .sp{color:var(--muted);font-size:.75rem}
+/* Values are separated by space, not punctuation.  A row of middle dots
+   between numbers reads as clutter at this size; a wide gap does the same
+   work and lets the eye group each name with its own value. */
+.vals{display:flex;flex-wrap:wrap;gap:.1rem 1.15em;
+  font-variant-numeric:tabular-nums}
+/* The parameters live in the hover text, not on the card: a selected card
+   that grows a block of numbers shifts every card beside it. */
+.star .pr,.star .pr2{display:none}
+.star.on{background:#eaf1f8}
+.star.on:hover{background:#eaf1f8}
+#controls{
+  position:sticky;top:0;z-index:5;background:var(--bg);
+  border-bottom:1px solid var(--line);padding-top:0;padding-bottom:9px;
+}
+.row{display:flex;align-items:center;gap:26px;flex-wrap:wrap;margin:7px 0 2px}
+/* one label-and-control pair, wherever it sits */
+.ctl{display:inline-flex;align-items:center;gap:8px}
+.ctl label,.frow label{font-size:.84rem;color:var(--muted);white-space:nowrap}
+/* the rail's own row: label at the left edge, control at the right */
+.frow{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin:8px 0;flex-wrap:wrap}
+.frow.toggles{justify-content:flex-start;gap:7px}
+.hint{color:var(--muted);font-size:.84rem}
+button,select{
+  font:inherit;font-size:.88rem;padding:3px 10px;border:1px solid transparent;
+  background:transparent;border-radius:4px;cursor:pointer;color:var(--ink);
+}
+button:hover{background:#ece8e0}
+#brush{width:100%;height:38px;display:block;border:1px solid var(--line);
+  background:var(--panel);border-radius:4px;cursor:crosshair}
+/* species live in a sticky rail beside the plot so they stay reachable while
+   scrolling a stack of panels several screens tall */
+#main{display:flex;gap:20px;align-items:flex-start}
+/* 48 species do not fit a viewport, so the rail scrolls on its own */
+#sidebar{position:sticky;top:calc(var(--ctrlh, 120px) + 10px);
+  flex:0 0 286px;padding-top:12px;padding-right:14px;
+  border-right:1px solid var(--line);
+  max-height:calc(100vh - var(--ctrlh, 120px) - 24px);
+  overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+#sidebar section{margin-bottom:22px}
+#sidebar h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;
+  color:var(--muted);font-weight:normal;margin:0 0 9px;padding-bottom:5px;
+  border-bottom:1px solid var(--line)}
+#sidebar .dual{width:118px}
+#sidebar #snr,#sidebar #teff{width:100%;accent-color:var(--atom);cursor:pointer}
+#sidebar input.wend{width:4.6ch}
+.sbtools{display:flex;gap:6px;margin-bottom:8px}
+.sbtools button{flex:1;border-color:var(--line);background:var(--panel)}
+/* three columns: 49 species in two ran well off the bottom of the page */
+#species{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:4px}
+/* grid-column 1/-1 takes a whole row, so each family starts on a fresh one
+   however the last one fell across the three columns */
+.grphdr{grid-column:1/-1;font-size:.68rem;text-transform:uppercase;
+  letter-spacing:.08em;color:var(--muted);margin:9px 0 2px;padding-bottom:3px;
+  border-bottom:1px solid var(--line)}
+.grphdr:first-child{margin-top:0}
+#plotwrap{flex:1 1 auto;min-width:0}
+/* a wavelength ruler pinned to the foot of the viewport, so a stack of panels
+   several screens tall always has a scale attached to it */
+/* the wrapper carries the sticking and the padding: putting a gap under a
+   sticky canvas would let the panels show through beneath it */
+#axiswrap{position:sticky;bottom:0;z-index:4;background:var(--bg);
+  border-top:1px solid var(--line);padding:5px 0 14px}
+#axis{display:block;width:100%}
+.chip{
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  font-size:.8rem;padding:3px 2px;border:1px solid var(--line);
+  border-radius:999px;background:var(--panel);cursor:pointer;user-select:none;
+  white-space:nowrap;
+}
+.chip input{display:none}
+.chip .sw{width:8px;height:8px;border-radius:50%;background:#bbb;flex:none}
+.chip.on{border-color:#9aa8b8;background:#eef2f7}
+.chip.on .sw{background:var(--atom)}
+.chip.on.mol{background:#faf1e2;border-color:#d3b483}
+.chip.on.mol .sw{background:var(--mol)}
+#plotwrap{padding-top:14px;padding-bottom:40px}
+#plot{width:100%;display:block;cursor:ew-resize}
+#tip{
+  position:fixed;pointer-events:none;z-index:9;display:none;
+  background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:5px;
+  padding:6px 9px;font-size:.84rem;box-shadow:0 2px 10px rgba(0,0,0,.10);
+  font-variant-numeric:tabular-nums;max-width:19rem;
+}
+#tip .hd{font-size:.92rem}
+#tip .par{color:var(--ink);margin-top:3px}
+#tip .lev{color:var(--muted);margin-top:3px;font-size:.78rem}
+#tip .j{color:var(--muted)}
+#tip .also{margin-top:5px;padding-top:4px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:.78rem;line-height:1.5}
+.hint.vals{gap:.1rem 1.4em}
+#plotwrap{position:relative}
+#lmark{position:absolute;display:none;width:1px;pointer-events:none;z-index:4;
+  background:var(--muted);opacity:.75}
+footer{border-top:1px solid var(--line);margin-top:8px;padding-top:16px;
+  padding-bottom:44px;color:#333;font-size:.9rem}
+footer p{max-width:78ch}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.86em;background:#efece6;
+  padding:1px 4px;border-radius:3px}
+@media (prefers-color-scheme:dark){
+  :root{--ink:#e9e6e0;--muted:#9a948c;--line:#3a3833;--bg:#171614;--panel:#201f1c;
+        --atom:#6fa8dc;--mol:#e0a458}
+  .chip.on{background:#22303f;border-color:#3c5570}
+  .chip.on.mol{background:#33281a;border-color:#6a5330}
+  button:hover{background:#2b2a26}
+  #tip{background:rgba(32,31,28,.97)}
+  .star:hover{background:#2b2a26}
+  .star.on{background:#1d2a36}
+  .star.on:hover{background:#1d2a36}
+  .segbar{background:#2b2a26}
+  .segbar .seg.on{background:#3b3934}
+  .segbar .seg.on:hover{background:#3b3934}
+  code{background:#2b2a26}
+}
+
+#res{width:210px;accent-color:var(--atom);cursor:pointer}
+#reslabel{font-variant-numeric:tabular-nums;min-width:16ch;font-size:.82rem}
+
+#err{position:fixed;left:0;right:0;bottom:0;z-index:99;display:none;
+  background:#7a1f1f;color:#fff;padding:8px 16px;font-size:.9rem}
+
+/* two-handled wavelength range; no native input does this */
+.dual{position:relative;width:300px;height:22px;flex:0 0 auto;touch-action:none}
+.dual .track{position:absolute;top:9px;left:0;right:0;height:4px;border-radius:2px;
+  background:var(--line)}
+.dual .fill{position:absolute;top:9px;height:4px;border-radius:2px;background:var(--atom);
+  cursor:grab}
+.dual .h{position:absolute;top:2px;width:17px;height:17px;margin-left:-8.5px;border-radius:50%;
+  background:var(--atom);border:2px solid var(--bg);cursor:ew-resize;box-shadow:0 0 0 1px var(--line)}
+/* the range ends are editable: click and type a wavelength */
+input.wend{font:inherit;font-size:.92rem;font-variant-numeric:tabular-nums;
+  color:var(--muted);width:8.5ch;padding:1px 4px;border:1px solid transparent;
+  border-radius:4px;background:transparent;cursor:text}
+input.wend:hover{border-color:var(--line)}
+input.wend:focus{outline:none;border-color:var(--atom);color:var(--ink);
+  background:var(--panel)}
+#wlo,#ylo{text-align:right}
+#ylo,#yhi{width:5ch}
+#yrange{width:220px}
+
+/* A choice among options is one recessed track with the current one raised;
+   a plain on/off toggle keeps its outline and fills when it is on.  The two
+   are different questions and should not look the same. */
+.segbar{display:inline-flex;background:#ece8e0;border-radius:5px;padding:2px}
+.segbar .seg{border:0;border-radius:4px;padding:2px 9px}
+.segbar .seg.on{background:var(--panel);color:var(--ink);
+  box-shadow:0 1px 2px rgba(0,0,0,.10)}
+.segbar .seg.on:hover{background:var(--panel)}
+.seg.lone{border-color:var(--line);border-radius:5px;padding:2px 10px}
+.seg.lone.on{background:var(--atom);border-color:var(--atom);color:#fff}
+.seg.lone.on:hover{background:var(--atom)}
+.sbtools .seg.on{background:var(--atom);border-color:var(--atom);color:#fff}
+.sbtools .seg.on:hover{background:var(--atom)}
